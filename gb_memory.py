@@ -254,8 +254,8 @@ class RegisterBank:
         self._DE = DoubleRegister()
         self._HL = DoubleRegister()
         self.flags = 0
-        self._SP = DoubleRegister(0xFFFE) # SP
-        self._PC = DoubleRegister(0x0100) # PC
+        self._SP = DoubleRegister() # SP
+        self._PC = DoubleRegister() # PC
 
     def increment_pc(self, value=1):
         self._PC.value += value
@@ -412,7 +412,8 @@ class RegisterBank:
         self.flags = self.flags & (0xFF ^ FLAG_C_MASK)
 
     def __str__(self):
-        return f'AF: {self._AF}, BC: {self._BC}, DE: {self._DE}, HL: {self._HL}, SP: {self.SP}, PC: {self.PC}'
+        flags = ('Z' if self.read_Z() else '-') + ('N' if self.read_N() else '-') + ('H' if self.read_H() else '-') + ('C' if self.read_C() else '-')
+        return f'AF: {self._AF}, BC: {self._BC}, DE: {self._DE}, HL: {self._HL}, SP: {self.SP:04X}, PC: {self.PC:04X}, F: {flags}'
 
     def __repr__(self):
         return self.__str__()

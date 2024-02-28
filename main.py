@@ -13,8 +13,9 @@ class CPU:
         self.memory = AddressSpace()
         self.memory.load_rom(game_rom, CARTRIDGE_ROM_ONLY)
         self.IME = 0 # Interrupt Master Enable
-        self.IF = 0 # Interrupt Flag
+        self.IF = SingleRegister() # Interrupt Flag
         self.IE = SingleRegister() # Interrupt Enable
+        self.clock = 0
 
     def fetch(self):
         opcode = self.memory[self.registers.PC]
@@ -39,6 +40,8 @@ class CPU:
         for i in range(code_length):
             extra_bytes.append(self.fetch()) # almost always LS byte first
 
+        duration = opcode_dict["cycles"][0]
+
         if opcode == 0x00: # NOP
             print("> NOP")
 
@@ -55,6 +58,9 @@ class CPU:
                 self.registers.set_Z()
             else:
                 self.registers.clear_Z()
+            self.registers.clear_N()
+            self.registers.clear_H()
+            self.registers.clear_C()
 
         elif opcode == 0x21: # LD HL, d16
             immediate = (extra_bytes[1] << 8) | extra_bytes[0]
@@ -98,6 +104,8 @@ class CPU:
             immediate = (extra_bytes[0] & 0x7F) - 128
             if not self.registers.read_Z():
                 self.registers.write_PC(self.registers.PC + immediate)
+            else:
+                duration = opcode_dict["cycles"][1]
 
         elif opcode == 0x0D: # DEC C
             print(F"> DEC C")
@@ -123,31 +131,31 @@ class CPU:
             self.IME = 0
 
         elif opcode == 0xE0: # LDH (d8), A
-            immediate = extra_bytes[0]
-            print(F"> LDH (0x{immediate:02X}), A")
-            self.memory[0xFF00 | immediate] = self.registers.A
+            immediate = 0xFF00 | extra_bytes[0]
+            print(F"> LDH (0x{immediate:04X}), A")
+            self.memory[immediate] = self.registers.A
 
         elif opcode == 0xF0: # LDH A, (d8)
-            immediate = extra_bytes[0]
-            print(F"> LDH (0x{immediate:02X}), A")
-            self.registers.A = self.memory[0xFF00 | immediate]
+            immediate = 0xFF00 | extra_bytes[0]
+            print(F"> LDH (0x{immediate:04X}), A")
+            self.registers.A = self.memory[immediate]
 
         elif opcode == 0xFE: # CP d8
             immediate = extra_bytes[0]
             print(F"> CP (0x{immediate:02X}), A")
             value_pre = self.registers.A
-            upper_nibble_pre = (self.registers.A >> 4) & 0xF
-            self.registers.A -= immediate
-            upper_nibble_post = (self.registers.A >> 4) & 0xF
+            upper_nibble_pre = (value_pre >> 4) & 0xF
+            value = (self.registers.A + ((immediate ^ 0xFF) + 1) & 0xFF) & 0xFF
+            upper_nibble_post = (value >> 4) & 0xF
             if upper_nibble_pre != upper_nibble_post:
                 self.registers.set_H()
             else:
                 self.registers.clear_H()
-            if self.registers.A == 0:
+            if value == 0:
                 self.registers.set_Z()
             else:
                 self.registers.clear_Z()
-            if value_pre < self.registers.A:
+            if value_pre < value:
                 self.registers.set_C()
             else:
                 self.registers.clear_C()
@@ -426,6 +434,44 @@ class CPU:
             immediate = (extra_bytes[0] & 0x7F) - 128
             if self.registers.read_Z():
                 self.registers.write_PC(self.registers.PC + immediate)
+            else:
+                duration = opcode_dict["cycles"][1]
+
+        elif opcode == 0x9D: # SBC A, L
+            print(F"> SBC A, L")
+            value_pre = self.registers.A
+            upper_nibble_pre = (self.registers.A >> 4) & 0xF
+            self.registers.A -= self.registers.L + self.registers.read_C()
+            upper_nibble_post = (self.registers.A >> 4) & 0xF
+            if upper_nibble_pre != upper_nibble_post:
+                self.registers.set_H()
+            else:
+                self.registers.clear_H()
+            if self.registers.A == 0:
+                self.registers.set_Z()
+            else:
+                self.registers.clear_Z()
+            if value_pre < self.registers.A:
+                self.registers.set_C()
+            else:
+                self.registers.clear_C()
+            self.registers.set_N()
+
+        elif opcode == 0x67: # LD H, A
+            print(F"> LD H, A")
+            self.registers.H = self.registers.A
+
+        elif opcode == 0xA5: # AND L
+            print(F"> AND L")
+            self.registers.A &= self.registers.L
+            self.registers.set_H()
+            if self.registers.A == 0:
+                self.registers.set_Z()
+            else:
+                self.registers.clear_Z()
+            self.registers.set_H()
+            self.registers.clear_C()
+            self.registers.clear_N()
 
         # The instructions CALL, PUSH, and RST all put
         # information onto the stack. The instructions POP, RET,
@@ -435,10 +481,55 @@ class CPU:
         else:
             raise NotImplementedError(F"Opcode not implemented: 0x{opcode:02X} ({opcode_dict['mnemonic']})")
 
+        self.clock += duration
+
+    def boot(self):
+        # TODO: implement power up sequence checks + graphics
+        self.registers.AF = 0x01B0
+        self.registers.BC = 0x0013
+        self.registers.DE = 0x00D8
+        self.registers.HL = 0x014D
+        self.registers.SP = 0xFFFE
+        self.registers.write_PC(0x0100)
+        self.registers.flags = 0xB0
+
+        self.memory[0xFF05] = 0x00  # TIMA
+        self.memory[0xFF06] = 0x00  # TMA
+        self.memory[0xFF07] = 0x00  # TAC
+        self.memory[0xFF10] = 0x80  # NR10
+        self.memory[0xFF11] = 0xBF  # NR11
+        self.memory[0xFF12] = 0xF3  # NR12
+        self.memory[0xFF14] = 0xBF  # NR14
+        self.memory[0xFF16] = 0x3F  # NR21
+        self.memory[0xFF17] = 0x00  # NR22
+        self.memory[0xFF19] = 0xBF  # NR24
+        self.memory[0xFF1A] = 0x7F  # NR30
+        self.memory[0xFF1B] = 0xFF  # NR31
+        self.memory[0xFF1C] = 0x9F  # NR32
+        self.memory[0xFF1E] = 0xBF  # NR33
+        self.memory[0xFF20] = 0xFF  # NR41
+        self.memory[0xFF21] = 0x00  # NR42
+        self.memory[0xFF22] = 0x00  # NR43
+        self.memory[0xFF23] = 0xBF  # NR30
+        self.memory[0xFF24] = 0x77  # NR50
+        self.memory[0xFF25] = 0xF3  # NR51
+        self.memory[0xFF26] = 0xF1  # NR52, GB, 0xF0-SGB
+        self.memory[0xFF40] = 0x91  # LCDC
+        self.memory[0xFF42] = 0x00  # SCY
+        self.memory[0xFF43] = 0x00  # SCX
+        self.memory[0xFF45] = 0x00  # LYC
+        self.memory[0xFF47] = 0xFC  # BGP
+        self.memory[0xFF48] = 0xFF  # OBP0
+        self.memory[0xFF49] = 0xFF  # OBP1
+        self.memory[0xFF4A] = 0x00  # WY
+        self.memory[0xFF4B] = 0x00  # WX
+        self.memory[0xFFFF] = 0x00  # IE
+
     def run(self):
-        # self.boot()
+        self.boot()
         while True:
-            print(F"PC: 0x{self.registers.PC:04X}")
+            # print(F"PC: 0x{self.registers.PC:04X}")
+            print(F"{self}")
             opcode = self.fetch()
             opcode_dict, opcode = self.decode(opcode)
             instr_str = f"{opcode:02X} ({opcode_dict['cycles']}) {opcode_dict['mnemonic']}"
@@ -448,6 +539,12 @@ class CPU:
                 instr_str += f", {opcode_dict['operand2']}"
             print(f"\t{instr_str}")
             self.execute(opcode, opcode_dict)
+
+    def __str__(self):
+        return f'{self.registers} | IF: {self.IF} IE: {self.IE} IME: {self.IME} | T: {self.clock}'
+
+    def __repr__(self):
+        return self.__str__()
 
 
 def main():
