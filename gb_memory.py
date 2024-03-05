@@ -253,7 +253,6 @@ class RegisterBank:
         self._BC = DoubleRegister()
         self._DE = DoubleRegister()
         self._HL = DoubleRegister()
-        self.flags = 0
         self._SP = DoubleRegister() # SP
         self._PC = DoubleRegister() # PC
 
@@ -371,45 +370,41 @@ class RegisterBank:
     def write_PC(self, value):
         self._PC.value = value
 
-    # @PC.setter
-    # def PC(self, value):
-    #     self.registers[5] = value
-
     def read_Z(self):
-        return (self.flags >> 7) & 1
+        return (self.F >> 7) & 1
 
     def read_N(self):
-        return (self.flags >> 6) & 1
+        return (self.F >> 6) & 1
 
     def read_H(self):
-        return (self.flags >> 5) & 1
+        return (self.F >> 5) & 1
 
     def read_C(self):
-        return (self.flags >> 4) & 1
+        return (self.F >> 4) & 1
 
     def set_Z(self):
-        self.flags = self.flags | FLAG_Z_MASK
+        self._AF[0] = self.F | FLAG_Z_MASK
 
     def set_N(self):
-        self.flags = self.flags | FLAG_N_MASK
+        self._AF[0] = self.F | FLAG_N_MASK
 
     def set_H(self):
-        self.flags = self.flags | FLAG_H_MASK
+        self._AF[0] = self.F | FLAG_H_MASK
 
     def set_C(self):
-        self.flags = self.flags | FLAG_C_MASK
+        self._AF[0] = self.F | FLAG_C_MASK
 
     def clear_Z(self):
-        self.flags = self.flags & (0xFF ^ FLAG_Z_MASK)
+        self._AF[0] = self.F & (0xFF ^ FLAG_Z_MASK)
 
     def clear_N(self):
-        self.flags = self.flags & (0xFF ^ FLAG_N_MASK)
+        self._AF[0] = self.F & (0xFF ^ FLAG_N_MASK)
 
     def clear_H(self):
-        self.flags = self.flags & (0xFF ^ FLAG_H_MASK)
+        self._AF[0] = self.F & (0xFF ^ FLAG_H_MASK)
 
     def clear_C(self):
-        self.flags = self.flags & (0xFF ^ FLAG_C_MASK)
+        self._AF[0] = self.F & (0xFF ^ FLAG_C_MASK)
 
     def __str__(self):
         flags = ('Z' if self.read_Z() else '-') + ('N' if self.read_N() else '-') + ('H' if self.read_H() else '-') + ('C' if self.read_C() else '-')

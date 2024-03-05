@@ -13,8 +13,6 @@ class CPU:
         self.memory = AddressSpace()
         self.memory.load_rom(game_rom, CARTRIDGE_ROM_ONLY)
         self.IME = 0 # Interrupt Master Enable
-        self.IF = SingleRegister() # Interrupt Flag
-        self.IE = SingleRegister() # Interrupt Enable
         self.clock = 0
 
     def fetch(self):
@@ -491,7 +489,6 @@ class CPU:
         self.registers.HL = 0x014D
         self.registers.SP = 0xFFFE
         self.registers.write_PC(0x0100)
-        self.registers.flags = 0xB0
 
         self.memory[0xFF05] = 0x00  # TIMA
         self.memory[0xFF06] = 0x00  # TMA
@@ -541,7 +538,7 @@ class CPU:
             self.execute(opcode, opcode_dict)
 
     def __str__(self):
-        return f'{self.registers} | IF: {self.IF} IE: {self.IE} IME: {self.IME} | T: {self.clock}'
+        return f'{self.registers} | IME: {self.IME} | T: {self.clock}'
 
     def __repr__(self):
         return self.__str__()
