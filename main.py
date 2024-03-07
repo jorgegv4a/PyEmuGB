@@ -5,12 +5,14 @@ from typing import Dict
 from gb_memory import AddressSpace, RegisterBank, SingleRegister, FLAG_Z_MASK, FLAG_N_MASK, FLAG_H_MASK, FLAG_C_MASK
 from gb_ops import opcodes
 from gb_constants import CARTRIDGE_ROM_ONLY
+from gb_graphics import LCDController
 
 
 class CPU:
     def __init__(self, game_rom: bytes):
         self.registers = RegisterBank()
         self.memory = AddressSpace()
+        self.ppu = LCDController()
         self.memory.load_rom(game_rom, CARTRIDGE_ROM_ONLY)
         self.IME = 0 # Interrupt Master Enable
         self.clock = 0
