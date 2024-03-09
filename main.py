@@ -5,17 +5,24 @@ from typing import Dict
 from gb_memory import AddressSpace, RegisterBank, SingleRegister, FLAG_Z_MASK, FLAG_N_MASK, FLAG_H_MASK, FLAG_C_MASK
 from gb_ops import opcodes
 from gb_constants import CARTRIDGE_ROM_ONLY
-from gb_graphics import LCDController
+from gb_graphics import LCDController, get_tiles
 
 
 class CPU:
     def __init__(self, game_rom: bytes):
         self.registers = RegisterBank()
         self.memory = AddressSpace()
-        self.ppu = LCDController()
         self.memory.load_rom(game_rom, CARTRIDGE_ROM_ONLY)
+        self.ppu = LCDController(self.memory)
         self.IME = 0 # Interrupt Master Enable
         self.clock = 0
+
+        get_tiles(self.memory)
+
+    def tick(self, n):
+        self.clock += n
+        for i in range(n):
+            self.ppu.tick()
 
     def fetch(self):
         opcode = self.memory[self.registers.PC]
@@ -473,6 +480,131 @@ class CPU:
             self.registers.clear_C()
             self.registers.clear_N()
 
+        elif opcode == 0xA7: # AND A
+            print(F"> AND A")
+            self.registers.A &= self.registers.A
+            self.registers.set_H()
+            if self.registers.A == 0:
+                self.registers.set_Z()
+            else:
+                self.registers.clear_Z()
+            self.registers.set_H()
+            self.registers.clear_C()
+            self.registers.clear_N()
+
+        elif opcode == 0x18: # JR e
+            print(F"> JR e")
+            # signed int
+            immediate = (extra_bytes[0] & 0x7F) - 128
+            self.registers.write_PC(self.registers.PC + immediate)
+
+        elif opcode == 0x1A: # LD A, (DE)
+            print(F"> LD A, (DE)")
+            print(F"> A: 0x{self.registers.A:02X}, DE: 0x{self.registers.DE:04X}")
+            self.registers.A = self.memory[self.registers.DE]
+
+        elif opcode == 0x10: # STOP
+            print("> STOP")
+            # TODO: stop clock, disable LCD, wait until joypad interrupt
+
+        elif opcode == 0x07: # RLCA
+            print(F"> RLCA")
+            top_bit = (self.registers.A >> 7) & 1
+            self.registers.A = ((self.registers.A & 0x7F) << 1) | top_bit
+            if top_bit:
+                self.registers.set_C()
+            else:
+                self.registers.clear_C()
+            self.registers.clear_Z()
+            self.registers.clear_N()
+            self.registers.clear_H()
+
+        elif opcode == 0x04: # INC B
+            print(F"> INC B")
+            upper_nibble_pre = (self.registers.B >> 4) & 0xF
+            self.registers.B += 1
+            upper_nibble_post = (self.registers.B >> 4) & 0xF
+            self.registers.clear_N()
+            if self.registers.B == 0:
+                self.registers.set_Z()
+            else:
+                self.registers.clear_Z()
+            if upper_nibble_pre != upper_nibble_post:
+                self.registers.set_H()
+            else:
+                self.registers.clear_H()
+
+        elif opcode == 0x08: # LD (a16), SP
+            immediate = (extra_bytes[1] << 8) | extra_bytes[0]
+            print(F"> LD (a16), SP")
+            print(F"> a16: 0x{immediate:04X}, SP: 0x{self.registers.SP:04X}")
+            self.memory[immediate] = self.registers.SP & 0xFF
+            self.memory[immediate + 1] = (self.registers.SP >> 8) & 0xFF
+
+        elif opcode == 0x80: # ADD A, B
+            print(F"> ADD A, B")
+            value_pre = self.registers.A
+            upper_nibble_pre = (self.registers.A >> 4) & 0xF
+            self.registers.A += self.registers.B
+            upper_nibble_post = (self.registers.A >> 4) & 0xF
+            if upper_nibble_pre != upper_nibble_post:
+                self.registers.set_H()
+            else:
+                self.registers.clear_H()
+            if self.registers.A == 0:
+                self.registers.set_Z()
+            else:
+                self.registers.clear_Z()
+            if value_pre > self.registers.A:
+                self.registers.set_C()
+            else:
+                self.registers.clear_C()
+            self.registers.clear_N()
+
+        elif opcode == 0x0F: # RRCA
+            print(F"> RRCA")
+            bottom_bit = self.registers.A & 1
+            self.registers.A = (self.registers.A >> 1) | (bottom_bit << 7)
+            if bottom_bit:
+                self.registers.set_C()
+            else:
+                self.registers.clear_C()
+            self.registers.clear_Z()
+            self.registers.clear_N()
+            self.registers.clear_H()
+
+        elif opcode == 0x0A: # LD A, (BC)
+            print(F"> LD A, (BC)")
+            print(F"> A: 0x{self.registers.A:02X}, BC: 0x{self.registers.BC:04X}")
+            self.registers.A = self.memory[self.registers.BC]
+
+        elif opcode == 0x3D: # DEC A
+            print(F"> DEC A")
+            upper_nibble_pre = (self.registers.A >> 4) & 0xF
+            self.registers.A -= 1
+            upper_nibble_post = (self.registers.A >> 4) & 0xF
+            self.registers.set_N()
+            if self.registers.A == 0:
+                self.registers.set_Z()
+            else:
+                self.registers.clear_Z()
+            if upper_nibble_pre != upper_nibble_post:
+                self.registers.set_H()
+            else:
+                self.registers.clear_H()
+
+        elif opcode == 0x1F: # RRA
+            print(F"> RRA")
+            bottom_bit = self.registers.A & 1
+            self.registers.A = (self.registers.A >> 1) | (self.registers.read_C() << 7)
+            if bottom_bit:
+                self.registers.set_C()
+            else:
+                self.registers.clear_C()
+            self.registers.clear_Z()
+            self.registers.clear_N()
+            self.registers.clear_H()
+
         # The instructions CALL, PUSH, and RST all put
         # information onto the stack. The instructions POP, RET,
         # and RETI all take information off of the stack.
@@ -481,7 +613,7 @@ class CPU:
         else:
             raise NotImplementedError(F"Opcode not implemented: 0x{opcode:02X} ({opcode_dict['mnemonic']})")
 
-        self.clock += duration
+        self.tick(duration // 4)
 
     def boot(self):
         # TODO: implement power up sequence checks + graphics

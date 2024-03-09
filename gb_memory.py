@@ -61,7 +61,7 @@ class AddressSpace:
             step = index.step if index.step is not None else 1
             return [self[i] for i in range(start, stop, step)]
         if index < 0 or index >= self.size:
-            raise ValueError(f'Address {index} out of range')
+            raise ValueError(f'Address {index:04X} out of range')
 
         if index < 0x4000:
             return self.rom_bank[index]
@@ -112,7 +112,7 @@ class AddressSpace:
 
     def __setitem__(self, index, value):
         if index < 0 or index >= self.size:
-            raise ValueError(f'Address {index} out of range')
+            raise ValueError(f'Address {index:04X} out of range')
 
         if index < 0x4000:
             # ROM bank 0, not writeable
