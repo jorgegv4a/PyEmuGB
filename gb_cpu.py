@@ -1,6 +1,6 @@
 from typing import Dict
 
-from gb_memory import AddressSpace, RegisterBank, SingleRegister, FLAG_Z_MASK, FLAG_N_MASK, FLAG_H_MASK, FLAG_C_MASK
+from gb_memory import AddressSpace, RegisterBank
 from gb_ops import opcodes
 from gb_constants import CARTRIDGE_ROM_ONLY
 from gb_graphics import LCDController, get_tiles
@@ -13,11 +13,20 @@ class CPU:
         self.memory.load_rom(game_rom, CARTRIDGE_ROM_ONLY)
         self.ppu = LCDController(self.memory)
         self.IME = 0 # Interrupt Master Enable
-        self.clock = 0
+        self.clock = 0 # real clock, Machine cycles take 4 cycles, PPU dots take 1 cycle
 
         get_tiles(self.memory)
 
     def tick(self, n):
+        """
+        Clock is increased by 4 after
+            - Instruction Fetch
+            - Data Byte Fetch
+            - Instruction CB Fetch
+
+        :param n:
+        :return:
+        """
         self.clock += n
         for i in range(n):
             self.ppu.tick()
@@ -25,6 +34,7 @@ class CPU:
     def fetch(self):
         opcode = self.memory[self.registers.PC]
         self.registers.increment_pc()
+        self.tick(4)
         return opcode
 
     def decode(self, opcode: int):
@@ -37,15 +47,17 @@ class CPU:
         return opcode_dict, opcode
 
     def execute(self, opcode: int, opcode_dict: Dict):
-        extra_bytes = []
-
+        start_clock_t = self.clock - 4 # discount 1 M-cycle to fetch first instr byte
         code_length = opcode_dict["length"] - 1
         if ((opcode >> 8) & 0xFF) == 0xCB:
             code_length -= 1
+
+        extra_bytes = []
         for i in range(code_length):
             extra_bytes.append(self.fetch()) # almost always LS byte first
 
-        duration = opcode_dict["cycles"][0]
+        # how many cycles we haven't ticked over yet
+        remaining_cycles = opcode_dict["cycles"][0] - (self.clock - start_clock_t)
 
         if opcode == 0x00: # NOP
             print("> NOP")
@@ -83,7 +95,6 @@ class CPU:
         elif opcode == 0x01: # LD BC, d16
             immediate = (extra_bytes[1] << 8) | extra_bytes[0]
             print(F"> LD BC, d16")
-            print(F"> BC: 0x{self.registers.BC:04X}, d16: 0x{immediate:04X}")
             self.registers.BC = immediate
 
         elif opcode == 0x21: # LD HL, d16
@@ -94,7 +105,6 @@ class CPU:
         elif opcode == 0x31: # LD SP, d16
             immediate = (extra_bytes[1] << 8) | extra_bytes[0]
             print(F"> LD SP, d16")
-            print(F"> SP: 0x{self.registers.SP:04X}, d16: 0x{immediate:04X}")
             self.registers.SP = immediate
 
         # ---- LOAD FROM SINGLE IMMEDIATE TO SINGLE REGISTER
@@ -121,7 +131,6 @@ class CPU:
         # ---- LOAD FROM SINGLE REGISTER TO INDIRECT ADDRESS
         elif opcode == 0x32: # LD (HL-), A
             print(F"> LD (HL-), A")
-            print(F"> HL: 0x{self.registers.HL:04X}, A: 0x{self.registers.A:02X}")
             self.memory[self.registers.HL] = self.registers.A
             self.registers.HL -= 1
 
@@ -129,21 +138,18 @@ class CPU:
         elif opcode == 0x36: # LD (HL), d8
             immediate = extra_bytes[0]
             print(F"> LD (HL), d8")
-            print(F"> HL: 0x{self.registers.HL:04X}, d8: 0x{immediate:02X}")
             self.memory[self.registers.HL] = immediate
 
         # ---- LOAD FROM SINGLE REGISTER TO DOUBLE IMMEDIATE INDIRECT ADDRESS
         elif opcode == 0xEA: # LD (a16), A
             immediate = (extra_bytes[1] << 8) | extra_bytes[0]
             print(F"> LD (a16), A")
-            print(F"> a16: 0x{immediate:04X}, A: 0x{self.registers.A:02X}")
             self.memory[immediate] = self.registers.A
 
         # ---- LOAD FROM DOUBLE REGISTER TO DOUBLE IMMEDIATE INDIRECT ADDRESS
         elif opcode == 0x08: # LD (a16), SP
             immediate = (extra_bytes[1] << 8) | extra_bytes[0]
             print(F"> LD (a16), SP")
-            print(F"> a16: 0x{immediate:04X}, SP: 0x{self.registers.SP:04X}")
             self.memory[immediate] = self.registers.SP & 0xFF
             self.memory[immediate + 1] = (self.registers.SP >> 8) & 0xFF
 
@@ -156,28 +162,23 @@ class CPU:
         # ---- LOAD FROM DOUBLE REGISTER INDIRECT ADDRESS TO SINGLE REGISTER
         elif opcode == 0x0A: # LD A, (BC)
             print(F"> LD A, (BC)")
-            print(F"> A: 0x{self.registers.A:02X}, BC: 0x{self.registers.BC:04X}")
             self.registers.A = self.memory[self.registers.BC]
 
         elif opcode == 0x1A: # LD A, (DE)
             print(F"> LD A, (DE)")
-            print(F"> A: 0x{self.registers.A:02X}, DE: 0x{self.registers.DE:04X}")
             self.registers.A = self.memory[self.registers.DE]
 
         elif opcode == 0x2A: # LD A, (HL+)
             print(F"> LD A, (HL+)")
-            print(F"> A: 0x{self.registers.A:02X}, HL: 0x{self.registers.HL:04X}")
             self.registers.A = self.memory[self.registers.HL]
             self.registers.HL += 1
 
         elif opcode == 0x56: # LD D, (HL)
             print(F"> LD D, (HL)")
-            print(F"> D: 0x{self.registers.D:02X}, HL: 0x{self.registers.HL:04X}")
             self.registers.D = self.memory[self.registers.HL]
 
         elif opcode == 0x5E: # LD E, (HL)
             print(F"> LD E, (HL)")
-            print(F"> E: 0x{self.registers.E:02X}, HL: 0x{self.registers.HL:04X}")
             self.registers.E = self.memory[self.registers.HL]
 
         # ---- LOAD FROM DOUBLE IMMEDIATE INDIRECT ADDRESS TO SINGLE REGISTER
@@ -554,7 +555,6 @@ class CPU:
 
         elif opcode == 0xE9:  # JP (HL)
             print(F"> JP (HL)")
-            print(F"> HL: 0x{self.registers.HL:04X}")
             self.registers.write_PC(self.memory[self.registers.HL])
 
         # ---- RELATIVE JUMP
@@ -571,7 +571,7 @@ class CPU:
             if not self.registers.read_Z():
                 self.registers.write_PC(self.registers.PC + immediate)
             else:
-                duration = opcode_dict["cycles"][1]
+                remaining_cycles = opcode_dict["cycles"][1] - (self.clock - start_clock_t)
 
         elif opcode == 0x28:  # JR Z, r8
             print(F"> JR Z, r8")
@@ -580,7 +580,7 @@ class CPU:
             if self.registers.read_Z():
                 self.registers.write_PC(self.registers.PC + immediate)
             else:
-                duration = opcode_dict["cycles"][1]
+                remaining_cycles = opcode_dict["cycles"][1] - (self.clock - start_clock_t)
 
         # ---- RESET VECTOR $28
         elif opcode == 0xEF:  # RST $28
@@ -655,7 +655,8 @@ class CPU:
         else:
             raise NotImplementedError(F"Opcode not implemented: 0x{opcode:02X} ({opcode_dict['mnemonic']})")
 
-        self.tick(duration // 4)
+        # Calls or Jumps take extra cycles
+        self.tick(remaining_cycles)
 
     def boot(self):
         # TODO: implement power up sequence checks + graphics
