@@ -52,12 +52,230 @@ class CPU:
         if opcode == 0x00: # NOP
             print("> NOP")
 
-        elif opcode == 0xC3: # JP a16
-            immediate = (extra_bytes[1] << 8) | extra_bytes[0]
-            print(F"> JP 0x{immediate:04X}")
-            self.registers.write_PC(immediate)
+        elif opcode == 0x10: # STOP
+            print("> STOP")
+            # TODO: stop clock, disable LCD, wait until joypad interrupt
+        # -- LOADS
+        # ---- LOAD FROM SINGLE REGISTER TO SINGLE REGISTER
+        elif opcode == 0x47:  # LD B, A
+            print(F"> LD B, A")
+            self.registers.B = self.registers.A
 
-        elif opcode == 0xAF: # XOR A
+        elif opcode == 0x4F:  # LD C, A
+            print(F"> LD C, A")
+            self.registers.C = self.registers.A
+
+        elif opcode == 0x5F:  # LD E, A
+            print(F"> LD E, A")
+            self.registers.E = self.registers.A
+
+        elif opcode == 0x67: # LD H, A
+            print(F"> LD H, A")
+            self.registers.H = self.registers.A
+
+        elif opcode == 0x78: # LD A, B
+            print(F"> LD A, B")
+            self.registers.A = self.registers.B
+
+        elif opcode == 0x79: # LD A, C
+            print(F"> LD A, C")
+            self.registers.A = self.registers.C
+
+        # ---- LOAD FROM DOUBLE IMMEDIATE TO DOUBLE REGISTER
+        elif opcode == 0x01: # LD BC, d16
+            immediate = (extra_bytes[1] << 8) | extra_bytes[0]
+            print(F"> LD BC, d16")
+            print(F"> BC: 0x{self.registers.BC:04X}, d16: 0x{immediate:04X}")
+            self.registers.BC = immediate
+
+        elif opcode == 0x21: # LD HL, d16
+            immediate = (extra_bytes[1] << 8) | extra_bytes[0]
+            print(F"> LD HL, 0x{immediate:04X}")
+            self.registers.HL = immediate
+
+        elif opcode == 0x31: # LD SP, d16
+            immediate = (extra_bytes[1] << 8) | extra_bytes[0]
+            print(F"> LD SP, d16")
+            print(F"> SP: 0x{self.registers.SP:04X}, d16: 0x{immediate:04X}")
+            self.registers.SP = immediate
+
+        # ---- LOAD FROM SINGLE IMMEDIATE TO SINGLE REGISTER
+        elif opcode == 0x3E:  # LD A, d8
+            immediate = extra_bytes[0]
+            print(F"> LD A, 0x{immediate:02X}")
+            self.registers.A = immediate
+
+        elif opcode == 0x06: # LD B, d8
+            immediate = extra_bytes[0]
+            print(F"> LD B, 0x{immediate:02X}")
+            self.registers.B = immediate
+
+        elif opcode == 0x0E: # LD C, d8
+            immediate = extra_bytes[0]
+            print(F"> LD C, 0x{immediate:02X}")
+            self.registers.C = immediate
+
+        elif opcode == 0x16:  # LD D, d8
+            immediate = extra_bytes[0]
+            print(F"> LD D, d8")
+            self.registers.D = immediate
+
+        # ---- LOAD FROM SINGLE REGISTER TO INDIRECT ADDRESS
+        elif opcode == 0x32: # LD (HL-), A
+            print(F"> LD (HL-), A")
+            print(F"> HL: 0x{self.registers.HL:04X}, A: 0x{self.registers.A:02X}")
+            self.memory[self.registers.HL] = self.registers.A
+            self.registers.HL -= 1
+
+        # ---- LOAD FROM SINGLE IMMEDIATE TO INDIRECT ADDRESS
+        elif opcode == 0x36: # LD (HL), d8
+            immediate = extra_bytes[0]
+            print(F"> LD (HL), d8")
+            print(F"> HL: 0x{self.registers.HL:04X}, d8: 0x{immediate:02X}")
+            self.memory[self.registers.HL] = immediate
+
+        # ---- LOAD FROM SINGLE REGISTER TO DOUBLE IMMEDIATE INDIRECT ADDRESS
+        elif opcode == 0xEA: # LD (a16), A
+            immediate = (extra_bytes[1] << 8) | extra_bytes[0]
+            print(F"> LD (a16), A")
+            print(F"> a16: 0x{immediate:04X}, A: 0x{self.registers.A:02X}")
+            self.memory[immediate] = self.registers.A
+
+        # ---- LOAD FROM DOUBLE REGISTER TO DOUBLE IMMEDIATE INDIRECT ADDRESS
+        elif opcode == 0x08: # LD (a16), SP
+            immediate = (extra_bytes[1] << 8) | extra_bytes[0]
+            print(F"> LD (a16), SP")
+            print(F"> a16: 0x{immediate:04X}, SP: 0x{self.registers.SP:04X}")
+            self.memory[immediate] = self.registers.SP & 0xFF
+            self.memory[immediate + 1] = (self.registers.SP >> 8) & 0xFF
+
+        # ---- LOAD FROM SINGLE REGISTER TO REGISTER INDIRECT ADDRESS
+        elif opcode == 0xE2: # LD (C), A
+            print(F"> LD (C), A")
+            print(F"> C (0x{self.registers.C:02X}), A: {self.registers.A}")
+            self.memory[0xFF00 | self.registers.C] = self.registers.A
+
+        # ---- LOAD FROM DOUBLE REGISTER INDIRECT ADDRESS TO SINGLE REGISTER
+        elif opcode == 0x0A: # LD A, (BC)
+            print(F"> LD A, (BC)")
+            print(F"> A: 0x{self.registers.A:02X}, BC: 0x{self.registers.BC:04X}")
+            self.registers.A = self.memory[self.registers.BC]
+
+        elif opcode == 0x1A: # LD A, (DE)
+            print(F"> LD A, (DE)")
+            print(F"> A: 0x{self.registers.A:02X}, DE: 0x{self.registers.DE:04X}")
+            self.registers.A = self.memory[self.registers.DE]
+
+        elif opcode == 0x2A: # LD A, (HL+)
+            print(F"> LD A, (HL+)")
+            print(F"> A: 0x{self.registers.A:02X}, HL: 0x{self.registers.HL:04X}")
+            self.registers.A = self.memory[self.registers.HL]
+            self.registers.HL += 1
+
+        elif opcode == 0x56: # LD D, (HL)
+            print(F"> LD D, (HL)")
+            print(F"> D: 0x{self.registers.D:02X}, HL: 0x{self.registers.HL:04X}")
+            self.registers.D = self.memory[self.registers.HL]
+
+        elif opcode == 0x5E: # LD E, (HL)
+            print(F"> LD E, (HL)")
+            print(F"> E: 0x{self.registers.E:02X}, HL: 0x{self.registers.HL:04X}")
+            self.registers.E = self.memory[self.registers.HL]
+
+        # ---- LOAD FROM DOUBLE IMMEDIATE INDIRECT ADDRESS TO SINGLE REGISTER
+        elif opcode == 0xFA: # LD A, (a16)
+            immediate = (extra_bytes[1] << 8) | extra_bytes[0]
+            print(F"> LD A, (a16)")
+            self.registers.A = self.memory[immediate]
+
+        # ---- LOAD FROM SINGLE REGISTER TO INDIRECT HIGH ADDRESS
+        elif opcode == 0xE0: # LDH (d8), A
+            immediate = 0xFF00 | extra_bytes[0]
+            print(F"> LDH (0x{immediate:04X}), A")
+            self.memory[immediate] = self.registers.A
+
+        # ---- LOAD FROM INDIRECT HIGH ADDRESS TO SINGLE REGISTER
+        elif opcode == 0xF0: # LDH A, (d8)
+            immediate = 0xFF00 | extra_bytes[0]
+            print(F"> LDH (0x{immediate:04X}), A")
+            self.registers.A = self.memory[immediate]
+
+        # -- ARITHMETIC AND LOGIC
+        # ---- A AND SINGLE REGISTER
+        elif opcode == 0xA7:  # AND A
+            print(F"> AND A")
+            self.registers.A &= self.registers.A
+            self.registers.set_H()
+            if self.registers.A == 0:
+                self.registers.set_Z()
+            else:
+                self.registers.clear_Z()
+            self.registers.set_H()
+            self.registers.clear_C()
+            self.registers.clear_N()
+
+        elif opcode == 0xA1:  # AND C
+            print(F"> AND C")
+            self.registers.A &= self.registers.C
+            self.registers.set_H()
+            if self.registers.A == 0:
+                self.registers.set_Z()
+            else:
+                self.registers.clear_Z()
+            self.registers.set_H()
+            self.registers.clear_C()
+            self.registers.clear_N()
+
+        elif opcode == 0xA5:  # AND L
+            print(F"> AND L")
+            self.registers.A &= self.registers.L
+            self.registers.set_H()
+            if self.registers.A == 0:
+                self.registers.set_Z()
+            else:
+                self.registers.clear_Z()
+            self.registers.set_H()
+            self.registers.clear_C()
+            self.registers.clear_N()
+
+        # ---- A AND SINGLE IMMEDIATE
+        elif opcode == 0xE6:  # AND d8
+            immediate = extra_bytes[0]
+            print(F"> AND d8")
+            self.registers.A &= immediate
+            self.registers.set_H()
+            if self.registers.A == 0:
+                self.registers.set_Z()
+            else:
+                self.registers.clear_Z()
+            self.registers.clear_C()
+            self.registers.clear_N()
+
+        # ---- A OR SINGLE IMMEDIATE
+        elif opcode == 0xB0:  # OR B
+            print(F"> OR B")
+            self.registers.A |= self.registers.B
+            if self.registers.A == 0:
+                self.registers.set_Z()
+            else:
+                self.registers.clear_Z()
+            self.registers.clear_C()
+            self.registers.clear_H()
+            self.registers.clear_N()
+
+        elif opcode == 0xB1:  # OR C
+            print(F"> OR C")
+            self.registers.A |= self.registers.C
+            if self.registers.A == 0:
+                self.registers.set_Z()
+            else:
+                self.registers.clear_Z()
+            self.registers.clear_C()
+            self.registers.clear_H()
+            self.registers.clear_N()
+
+        # ---- A XOR SINGLE REGISTER
+        elif opcode == 0xAF:  # XOR A
             print("> XOR A")
             self.registers.A ^= self.registers.A
 
@@ -69,26 +287,149 @@ class CPU:
             self.registers.clear_H()
             self.registers.clear_C()
 
-        elif opcode == 0x21: # LD HL, d16
-            immediate = (extra_bytes[1] << 8) | extra_bytes[0]
-            print(F"> LD HL, 0x{immediate:04X}")
-            self.registers.HL = immediate
+        elif opcode == 0xA9:  # XOR C
+            print("> XOR C")
+            self.registers.A ^= self.registers.C
 
-        elif opcode == 0x0E: # LD C, d8
-            immediate = extra_bytes[0]
-            print(F"> LD C, 0x{immediate:02X}")
-            self.registers.C = immediate
+            if self.registers.A == 0:
+                self.registers.set_Z()
+            else:
+                self.registers.clear_Z()
+            self.registers.clear_N()
+            self.registers.clear_H()
+            self.registers.clear_C()
 
-        elif opcode == 0x06: # LD B, d8
-            immediate = extra_bytes[0]
-            print(F"> LD B, 0x{immediate:02X}")
-            self.registers.B = immediate
+        # ---- ADD SINGLE REGISTER TO SINGLE REGISTER
+        elif opcode == 0x87:  # ADD A, A
+            print(F"> ADD A, A")
+            value_pre = self.registers.A
+            upper_nibble_pre = (self.registers.A >> 4) & 0xF
+            self.registers.A += self.registers.A
+            upper_nibble_post = (self.registers.A >> 4) & 0xF
+            if upper_nibble_pre != upper_nibble_post:
+                self.registers.set_H()
+            else:
+                self.registers.clear_H()
+            if self.registers.A == 0:
+                self.registers.set_Z()
+            else:
+                self.registers.clear_Z()
+            if value_pre > self.registers.A:
+                self.registers.set_C()
+            else:
+                self.registers.clear_C()
+            self.registers.clear_N()
 
-        elif opcode == 0x32: # LD (HL-), A
-            print(F"> LD (HL-), A")
-            print(F"> HL: 0x{self.registers.HL:04X}, A: 0x{self.registers.A:02X}")
-            self.memory[self.registers.HL] = self.registers.A
-            self.registers.HL -= 1
+        elif opcode == 0x80:  # ADD A, B
+            print(F"> ADD A, B")
+            value_pre = self.registers.A
+            upper_nibble_pre = (self.registers.A >> 4) & 0xF
+            self.registers.A += self.registers.B
+            upper_nibble_post = (self.registers.A >> 4) & 0xF
+            if upper_nibble_pre != upper_nibble_post:
+                self.registers.set_H()
+            else:
+                self.registers.clear_H()
+            if self.registers.A == 0:
+                self.registers.set_Z()
+            else:
+                self.registers.clear_Z()
+            if value_pre > self.registers.A:
+                self.registers.set_C()
+            else:
+                self.registers.clear_C()
+            self.registers.clear_N()
+
+        # ---- ADD DOUBLE REGISTER TO DOUBLE REGISTER
+        elif opcode == 0x19:  # ADD HL, DE
+            print(F"> ADD HL, DE")
+            value_pre = self.registers.HL
+            # 16 bit addition uses the 8 bit ALU, LSB first then MSB, so the resulting flags apply to the high byte
+            upper_nibble_pre = (self.registers.H >> 4) & 0xF
+            self.registers.HL += self.registers.DE
+            upper_nibble_post = (self.registers.H >> 4) & 0xF
+            if upper_nibble_pre != upper_nibble_post:
+                self.registers.set_H()
+            else:
+                self.registers.clear_H()
+            if value_pre > self.registers.HL:
+                self.registers.set_C()
+            else:
+                self.registers.clear_C()
+            self.registers.clear_N()
+
+        # SUBSTRACT WITH CARRY FROM SINGLE REGISTER
+        elif opcode == 0x9D:  # SBC A, L
+            print(F"> SBC A, L")
+            value_pre = self.registers.A
+            upper_nibble_pre = (self.registers.A >> 4) & 0xF
+            self.registers.A -= self.registers.L + self.registers.read_C()
+            upper_nibble_post = (self.registers.A >> 4) & 0xF
+            if upper_nibble_pre != upper_nibble_post:
+                self.registers.set_H()
+            else:
+                self.registers.clear_H()
+            if self.registers.A == 0:
+                self.registers.set_Z()
+            else:
+                self.registers.clear_Z()
+            if value_pre < self.registers.A:
+                self.registers.set_C()
+            else:
+                self.registers.clear_C()
+            self.registers.set_N()
+
+        # ---- INCREMENT SINGLE REGISTER
+        elif opcode == 0x04:  # INC B
+            print(F"> INC B")
+            upper_nibble_pre = (self.registers.B >> 4) & 0xF
+            self.registers.B += 1
+            upper_nibble_post = (self.registers.B >> 4) & 0xF
+            self.registers.clear_N()
+            if self.registers.B == 0:
+                self.registers.set_Z()
+            else:
+                self.registers.clear_Z()
+            if upper_nibble_pre != upper_nibble_post:
+                self.registers.set_H()
+            else:
+                self.registers.clear_H()
+
+        elif opcode == 0x0C:  # INC C
+            print(F"> INC C")
+            upper_nibble_pre = (self.registers.C >> 4) & 0xF
+            self.registers.C += 1
+            upper_nibble_post = (self.registers.C >> 4) & 0xF
+            self.registers.clear_N()
+            if self.registers.C == 0:
+                self.registers.set_Z()
+            else:
+                self.registers.clear_Z()
+            if upper_nibble_pre != upper_nibble_post:
+                self.registers.set_H()
+            else:
+                self.registers.clear_H()
+
+        # ---- INCREMENT DOUBLE REGISTER
+        elif opcode == 0x23:  # INC HL
+            print(F"> INC HL")
+            self.registers.HL += 1
+
+        # ---- DECREMENT SINGLE REGISTER
+        elif opcode == 0x3D: # DEC A
+            print(F"> DEC A")
+            upper_nibble_pre = (self.registers.A >> 4) & 0xF
+            self.registers.A -= 1
+            upper_nibble_post = (self.registers.A >> 4) & 0xF
+            self.registers.set_N()
+            if self.registers.A == 0:
+                self.registers.set_Z()
+            else:
+                self.registers.clear_Z()
+            if upper_nibble_pre != upper_nibble_post:
+                self.registers.set_H()
+            else:
+                self.registers.clear_H()
 
         elif opcode == 0x05: # DEC B
             print(F"> DEC B")
@@ -105,15 +446,6 @@ class CPU:
             else:
                 self.registers.clear_H()
 
-        elif opcode == 0x20: # JR NZ, r8
-            print(F"> JR NZ, r8")
-            # signed int
-            immediate = (extra_bytes[0] & 0x7F) - 128
-            if not self.registers.read_Z():
-                self.registers.write_PC(self.registers.PC + immediate)
-            else:
-                duration = opcode_dict["cycles"][1]
-
         elif opcode == 0x0D: # DEC C
             print(F"> DEC C")
             upper_nibble_pre = (self.registers.C >> 4) & 0xF
@@ -128,25 +460,20 @@ class CPU:
                 self.registers.set_H()
             else:
                 self.registers.clear_H()
-        elif opcode == 0x3E: # LD A, d8
-            immediate = extra_bytes[0]
-            print(F"> LD A, 0x{immediate:02X}")
-            self.registers.A = immediate
 
-        elif opcode == 0xF3: # DI
-            print(F"> DI")
-            self.IME = 0
+        # ---- DECREMENT DOUBLE REGISTER
+        elif opcode == 0x0B: # DEC BC
+            print(F"> DEC BC")
+            self.registers.BC -= 1
 
-        elif opcode == 0xE0: # LDH (d8), A
-            immediate = 0xFF00 | extra_bytes[0]
-            print(F"> LDH (0x{immediate:04X}), A")
-            self.memory[immediate] = self.registers.A
+        # ---- COMPLEMENT A
+        elif opcode == 0x2F: # CPL
+            print(f"> CPL")
+            self.registers.A ^= 0xFF
+            self.registers.set_H()
+            self.registers.set_N()
 
-        elif opcode == 0xF0: # LDH A, (d8)
-            immediate = 0xFF00 | extra_bytes[0]
-            print(F"> LDH (0x{immediate:04X}), A")
-            self.registers.A = self.memory[immediate]
-
+        # ---- COMPARE SINGLE IMMEDIATE
         elif opcode == 0xFE: # CP d8
             immediate = extra_bytes[0]
             print(F"> CP (0x{immediate:02X}), A")
@@ -168,112 +495,9 @@ class CPU:
                 self.registers.clear_C()
             self.registers.set_N()
 
-        elif opcode == 0x36: # LD (HL), d8
-            immediate = extra_bytes[0]
-            print(F"> LD (HL), d8")
-            print(F"> HL: 0x{self.registers.HL:04X}, d8: 0x{immediate:02X}")
-            self.memory[self.registers.HL] = immediate
-
-        elif opcode == 0xEA: # LD (a16), A
-            immediate = (extra_bytes[1] << 8) | extra_bytes[0]
-            print(F"> LD (a16), A")
-            print(F"> a16: 0x{immediate:04X}, A: 0x{self.registers.A:02X}")
-            self.memory[immediate] = self.registers.A
-
-        elif opcode == 0x31: # LD SP, d16
-            immediate = (extra_bytes[1] << 8) | extra_bytes[0]
-            print(F"> LD SP, d16")
-            print(F"> SP: 0x{self.registers.SP:04X}, d16: 0x{immediate:04X}")
-            self.registers.SP = immediate
-
-        elif opcode == 0x2A: # LD A, (HL+)
-            print(F"> LD A, (HL+)")
-            print(F"> A: 0x{self.registers.A:02X}, HL: 0x{self.registers.HL:04X}")
-            self.registers.A = self.memory[self.registers.HL]
-            self.registers.HL += 1
-
-        elif opcode == 0xE2: # LD (C), A
-            print(F"> LD (C), A")
-            print(F"> C (0x{self.registers.C:02X}), A: {self.registers.A}")
-            self.memory[0xFF00 | self.registers.C] = self.registers.A
-
-        elif opcode == 0x0C: # INC C
-            print(F"> INC C")
-            upper_nibble_pre = (self.registers.C >> 4) & 0xF
-            self.registers.C += 1
-            upper_nibble_post = (self.registers.C >> 4) & 0xF
-            self.registers.clear_N()
-            if self.registers.C == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            if upper_nibble_pre != upper_nibble_post:
-                self.registers.set_H()
-            else:
-                self.registers.clear_H()
-
-        elif opcode == 0xCD: # CALL a16
-            print(F"> CALL a16")
-            immediate = (extra_bytes[1] << 8) | extra_bytes[0]
-            self.registers.SP -= 2
-            self.memory[self.registers.SP + 1] = (self.registers.PC >> 8) & 0xFF
-            self.memory[self.registers.SP] = self.registers.PC & 0xFF
-            self.registers.write_PC(immediate)
-
-        elif opcode == 0x01: # LD BC, d16
-            immediate = (extra_bytes[1] << 8) | extra_bytes[0]
-            print(F"> LD BC, d16")
-            print(F"> BC: 0x{self.registers.BC:04X}, d16: 0x{immediate:04X}")
-            self.registers.BC = immediate
-
-        elif opcode == 0x0B: # DEC BC
-            print(F"> DEC BC")
-            self.registers.BC -= 1
-
-        elif opcode == 0x78: # LD A, B
-            print(F"> LD A, B")
-            self.registers.A = self.registers.B
-
-        elif opcode == 0xB1: # OR C
-            print(F"> OR C")
-            self.registers.A |= self.registers.C
-            if self.registers.A == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            self.registers.clear_C()
-            self.registers.clear_H()
-            self.registers.clear_N()
-
-        elif opcode == 0xC9: # RET
-            print(f"> RET")
-            address = self.memory[self.registers.SP] | (self.memory[self.registers.SP + 1] << 8)
-            self.registers.SP += 2
-            self.registers.write_PC(address)
-
-        elif opcode == 0xFB: # EI
-            print(f"> EI")
-            self.IME = 1 # TODO: should be done after the next cycle, not immediately
-
-        elif opcode == 0x2F: # CPL
-            print(f"> CPL")
-            self.registers.A ^= 0xFF
-            self.registers.set_H()
-            self.registers.set_N()
-
-        elif opcode == 0xE6: # AND d8
-            immediate = extra_bytes[0]
-            print(F"> AND d8")
-            self.registers.A &= immediate
-            self.registers.set_H()
-            if self.registers.A == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            self.registers.clear_C()
-            self.registers.clear_N()
-
-        elif opcode == 0xCB37: # SWAP A
+        # -- ROTATES AND SHIFTS
+        # ---- SWAP SINGLE REGISTER
+        elif opcode == 0xCB37:  # SWAP A
             print(F"> SWAP A")
             self.registers.A = ((self.registers.A & 0xF) << 4) | ((self.registers.A >> 4) & 0xF)
             self.registers.set_H()
@@ -284,133 +508,122 @@ class CPU:
             self.registers.clear_C()
             self.registers.clear_N()
 
-        elif opcode == 0x47: # LD B, A
-            print(F"> LD B, A")
-            self.registers.B = self.registers.A
-
-        elif opcode == 0xB0: # OR B
-            print(F"> OR B")
-            self.registers.A |= self.registers.B
-            if self.registers.A == 0:
-                self.registers.set_Z()
+        # ---- ROTATE RIGHT CIRCULAR A
+        elif opcode == 0x0F:  # RRCA
+            print(F"> RRCA")
+            bottom_bit = self.registers.A & 1
+            self.registers.A = (self.registers.A >> 1) | (bottom_bit << 7)
+            if bottom_bit:
+                self.registers.set_C()
             else:
-                self.registers.clear_Z()
-            self.registers.clear_C()
+                self.registers.clear_C()
+            self.registers.clear_Z()
+            self.registers.clear_N()
             self.registers.clear_H()
-            self.registers.clear_N()
 
-        elif opcode == 0x4F: # LD C, A
-            print(F"> LD C, A")
-            self.registers.C = self.registers.A
-
-        elif opcode == 0xA9:  # XOR C
-            print("> XOR C")
-            self.registers.A ^= self.registers.C
-
-            if self.registers.A == 0:
-                self.registers.set_Z()
+        # ---- ROTATE LEFT CIRCULAR A
+        elif opcode == 0x07:  # RLCA
+            print(F"> RLCA")
+            top_bit = (self.registers.A >> 7) & 1
+            self.registers.A = ((self.registers.A & 0x7F) << 1) | top_bit
+            if top_bit:
+                self.registers.set_C()
             else:
-                self.registers.clear_Z()
-
-        elif opcode == 0xA1: # AND C
-            print(F"> AND C")
-            self.registers.A &= self.registers.C
-            self.registers.set_H()
-            if self.registers.A == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            self.registers.set_H()
-            self.registers.clear_C()
+                self.registers.clear_C()
+            self.registers.clear_Z()
             self.registers.clear_N()
+            self.registers.clear_H()
 
-        elif opcode == 0x79: # LD A, C
-            print(F"> LD A, C")
-            self.registers.A = self.registers.C
+        # ---- ROTATE RIGHT CIRCULAR A
+        elif opcode == 0x1F:  # RRA
+            print(F"> RRA")
+            bottom_bit = self.registers.A & 1
+            self.registers.A = (self.registers.A >> 1) | (self.registers.read_C() << 7)
+            if bottom_bit:
+                self.registers.set_C()
+            else:
+                self.registers.clear_C()
+            self.registers.clear_Z()
+            self.registers.clear_N()
+            self.registers.clear_H()
 
-        elif opcode == 0xEF: # RST $28
+        # -- CONTROL FLOW
+        # ---- ABSOLUTE JUMPS
+        elif opcode == 0xC3:  # JP a16
+            immediate = (extra_bytes[1] << 8) | extra_bytes[0]
+            print(F"> JP 0x{immediate:04X}")
+            self.registers.write_PC(immediate)
+
+        elif opcode == 0xE9:  # JP (HL)
+            print(F"> JP (HL)")
+            print(F"> HL: 0x{self.registers.HL:04X}")
+            self.registers.write_PC(self.memory[self.registers.HL])
+
+        # ---- RELATIVE JUMP
+        elif opcode == 0x18:  # JR e
+            print(F"> JR e")
+            # signed int
+            immediate = (extra_bytes[0] & 0x7F) - 128
+            self.registers.write_PC(self.registers.PC + immediate)
+
+        elif opcode == 0x20:  # JR NZ, r8
+            print(F"> JR NZ, r8")
+            # signed int
+            immediate = (extra_bytes[0] & 0x7F) - 128
+            if not self.registers.read_Z():
+                self.registers.write_PC(self.registers.PC + immediate)
+            else:
+                duration = opcode_dict["cycles"][1]
+
+        elif opcode == 0x28:  # JR Z, r8
+            print(F"> JR Z, r8")
+            # signed int
+            immediate = (extra_bytes[0] & 0x7F) - 128
+            if self.registers.read_Z():
+                self.registers.write_PC(self.registers.PC + immediate)
+            else:
+                duration = opcode_dict["cycles"][1]
+
+        # ---- RESET VECTOR $28
+        elif opcode == 0xEF:  # RST $28
             print(F"> RST $28")
             self.registers.SP -= 2
             self.memory[self.registers.SP + 1] = (self.registers.PC >> 8) & 0xFF
             self.memory[self.registers.SP] = self.registers.PC & 0xFF
             self.registers.write_PC(0x0028)
 
-        elif opcode == 0x87: # ADD A, A
-            print(F"> ADD A, A")
-            value_pre = self.registers.A
-            upper_nibble_pre = (self.registers.A >> 4) & 0xF
-            self.registers.A += self.registers.A
-            upper_nibble_post = (self.registers.A >> 4) & 0xF
-            if upper_nibble_pre != upper_nibble_post:
-                self.registers.set_H()
-            else:
-                self.registers.clear_H()
-            if self.registers.A == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            if value_pre > self.registers.A:
-                self.registers.set_C()
-            else:
-                self.registers.clear_C()
-            self.registers.clear_N()
+        # ---- CALL DOUBLE INMMEDIATE
+        elif opcode == 0xCD:  # CALL a16
+            print(F"> CALL a16")
+            immediate = (extra_bytes[1] << 8) | extra_bytes[0]
+            self.registers.SP -= 2
+            self.memory[self.registers.SP + 1] = (self.registers.PC >> 8) & 0xFF
+            self.memory[self.registers.SP] = self.registers.PC & 0xFF
+            self.registers.write_PC(immediate)
 
+        # ---- RETURN
+        elif opcode == 0xC9:  # RET
+            print(f"> RET")
+            address = self.memory[self.registers.SP] | (self.memory[self.registers.SP + 1] << 8)
+            self.registers.SP += 2
+            self.registers.write_PC(address)
+
+        # -- INTERRUPT CONTROL
+        # ---- DISABLE INTERRUPTS
+        elif opcode == 0xF3: # DI
+            print(F"> DI")
+            self.IME = 0
+
+        # ---- ENABLE INTERRUPTS
+        elif opcode == 0xFB: # EI
+            print(f"> EI")
+            self.IME = 1 # TODO: should be done after the next cycle, not immediately
+
+        # ---- STACK PUSH/POP
         elif opcode == 0xE1: # POP HL
             print(F"> POP HL")
             self.registers.HL = (self.memory[self.registers.SP + 1] << 8) | self.memory[self.registers.SP]
             self.registers.SP += 2
-
-        elif opcode == 0x5F: # LD E, A
-            print(F"> LD E, A")
-            self.registers.E = self.registers.A
-
-        elif opcode == 0x16: # LD D, d8
-            immediate = extra_bytes[0]
-            print(F"> LD D, d8")
-            print(F"> D: 0x{self.registers.D:02X}, d8: 0x{immediate:02X}")
-            self.registers.D = immediate
-
-        elif opcode == 0x19: # ADD HL, DE
-            print(F"> ADD HL, DE")
-            value_pre = self.registers.HL
-            # 16 bit addition uses the 8 bit ALU, LSB first then MSB, so the resulting flags apply to the high byte
-            upper_nibble_pre = (self.registers.H >> 4) & 0xF
-            self.registers.HL += self.registers.DE
-            upper_nibble_post = (self.registers.H >> 4) & 0xF
-            if upper_nibble_pre != upper_nibble_post:
-                self.registers.set_H()
-            else:
-                self.registers.clear_H()
-            if value_pre > self.registers.HL:
-                self.registers.set_C()
-            else:
-                self.registers.clear_C()
-            self.registers.clear_N()
-
-        elif opcode == 0x5E: # LD E, (HL)
-            print(F"> LD E, (HL)")
-            print(F"> E: 0x{self.registers.E:02X}, HL: 0x{self.registers.HL:04X}")
-            self.registers.E = self.memory[self.registers.HL]
-
-        elif opcode == 0x23: # INC HL
-            print(F"> INC HL")
-            self.registers.HL += 1
-
-        elif opcode == 0x56: # LD D, (HL)
-            print(F"> LD D, (HL)")
-            print(F"> D: 0x{self.registers.D:02X}, HL: 0x{self.registers.HL:04X}")
-            self.registers.D = self.memory[self.registers.HL]
-
-        elif opcode == 0xD5: # PUSH DE
-            print(F"> PUSH DE")
-            self.registers.SP -= 2
-            self.memory[self.registers.SP + 1] = self.registers.D
-            self.memory[self.registers.SP] = self.registers.E
-
-        elif opcode == 0xE9:  # JP (HL)
-            print(F"> JP (HL)")
-            print(F"> HL: 0x{self.registers.HL:04X}")
-            self.registers.write_PC(self.memory[self.registers.HL])
 
         elif opcode == 0xF5: # PUSH AF
             print(F"> PUSH AF")
@@ -424,186 +637,17 @@ class CPU:
             self.memory[self.registers.SP + 1] = self.registers.B
             self.memory[self.registers.SP] = self.registers.C
 
+        elif opcode == 0xD5: # PUSH DE
+            print(F"> PUSH DE")
+            self.registers.SP -= 2
+            self.memory[self.registers.SP + 1] = self.registers.D
+            self.memory[self.registers.SP] = self.registers.E
+
         elif opcode == 0xE5: # PUSH HL
             print(F"> PUSH HL")
             self.registers.SP -= 2
             self.memory[self.registers.SP + 1] = self.registers.H
             self.memory[self.registers.SP] = self.registers.L
-
-        elif opcode == 0xFA: # LD A, (a16)
-            immediate = (extra_bytes[1] << 8) | extra_bytes[0]
-            print(F"> LD A, (a16)")
-            self.registers.A = self.memory[immediate]
-
-        elif opcode == 0x28: # JR Z, r8
-            print(F"> JR Z, r8")
-            # signed int
-            immediate = (extra_bytes[0] & 0x7F) - 128
-            if self.registers.read_Z():
-                self.registers.write_PC(self.registers.PC + immediate)
-            else:
-                duration = opcode_dict["cycles"][1]
-
-        elif opcode == 0x9D: # SBC A, L
-            print(F"> SBC A, L")
-            value_pre = self.registers.A
-            upper_nibble_pre = (self.registers.A >> 4) & 0xF
-            self.registers.A -= self.registers.L + self.registers.read_C()
-            upper_nibble_post = (self.registers.A >> 4) & 0xF
-            if upper_nibble_pre != upper_nibble_post:
-                self.registers.set_H()
-            else:
-                self.registers.clear_H()
-            if self.registers.A == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            if value_pre < self.registers.A:
-                self.registers.set_C()
-            else:
-                self.registers.clear_C()
-            self.registers.set_N()
-
-        elif opcode == 0x67: # LD H, A
-            print(F"> LD H, A")
-            self.registers.H = self.registers.A
-
-        elif opcode == 0xA5: # AND L
-            print(F"> AND L")
-            self.registers.A &= self.registers.L
-            self.registers.set_H()
-            if self.registers.A == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            self.registers.set_H()
-            self.registers.clear_C()
-            self.registers.clear_N()
-
-        elif opcode == 0xA7: # AND A
-            print(F"> AND A")
-            self.registers.A &= self.registers.A
-            self.registers.set_H()
-            if self.registers.A == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            self.registers.set_H()
-            self.registers.clear_C()
-            self.registers.clear_N()
-
-        elif opcode == 0x18: # JR e
-            print(F"> JR e")
-            # signed int
-            immediate = (extra_bytes[0] & 0x7F) - 128
-            self.registers.write_PC(self.registers.PC + immediate)
-
-        elif opcode == 0x1A: # LD A, (DE)
-            print(F"> LD A, (DE)")
-            print(F"> A: 0x{self.registers.A:02X}, DE: 0x{self.registers.DE:04X}")
-            self.registers.A = self.memory[self.registers.DE]
-
-        elif opcode == 0x10: # STOP
-            print("> STOP")
-            # TODO: stop clock, disable LCD, wait until joypad interrupt
-
-        elif opcode == 0x07: # RLCA
-            print(F"> RLCA")
-            top_bit = (self.registers.A >> 7) & 1
-            self.registers.A = ((self.registers.A & 0x7F) << 1) | top_bit
-            if top_bit:
-                self.registers.set_C()
-            else:
-                self.registers.clear_C()
-            self.registers.clear_Z()
-            self.registers.clear_N()
-            self.registers.clear_H()
-
-        elif opcode == 0x04: # INC B
-            print(F"> INC B")
-            upper_nibble_pre = (self.registers.B >> 4) & 0xF
-            self.registers.B += 1
-            upper_nibble_post = (self.registers.B >> 4) & 0xF
-            self.registers.clear_N()
-            if self.registers.B == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            if upper_nibble_pre != upper_nibble_post:
-                self.registers.set_H()
-            else:
-                self.registers.clear_H()
-
-        elif opcode == 0x08: # LD (a16), SP
-            immediate = (extra_bytes[1] << 8) | extra_bytes[0]
-            print(F"> LD (a16), SP")
-            print(F"> a16: 0x{immediate:04X}, SP: 0x{self.registers.SP:04X}")
-            self.memory[immediate] = self.registers.SP & 0xFF
-            self.memory[immediate + 1] = (self.registers.SP >> 8) & 0xFF
-
-        elif opcode == 0x80: # ADD A, B
-            print(F"> ADD A, B")
-            value_pre = self.registers.A
-            upper_nibble_pre = (self.registers.A >> 4) & 0xF
-            self.registers.A += self.registers.B
-            upper_nibble_post = (self.registers.A >> 4) & 0xF
-            if upper_nibble_pre != upper_nibble_post:
-                self.registers.set_H()
-            else:
-                self.registers.clear_H()
-            if self.registers.A == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            if value_pre > self.registers.A:
-                self.registers.set_C()
-            else:
-                self.registers.clear_C()
-            self.registers.clear_N()
-
-        elif opcode == 0x0F: # RRCA
-            print(F"> RRCA")
-            bottom_bit = self.registers.A & 1
-            self.registers.A = (self.registers.A >> 1) | (bottom_bit << 7)
-            if bottom_bit:
-                self.registers.set_C()
-            else:
-                self.registers.clear_C()
-            self.registers.clear_Z()
-            self.registers.clear_N()
-            self.registers.clear_H()
-
-        elif opcode == 0x0A: # LD A, (BC)
-            print(F"> LD A, (BC)")
-            print(F"> A: 0x{self.registers.A:02X}, BC: 0x{self.registers.BC:04X}")
-            self.registers.A = self.memory[self.registers.BC]
-
-        elif opcode == 0x3D: # DEC A
-            print(F"> DEC A")
-            upper_nibble_pre = (self.registers.A >> 4) & 0xF
-            self.registers.A -= 1
-            upper_nibble_post = (self.registers.A >> 4) & 0xF
-            self.registers.set_N()
-            if self.registers.A == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            if upper_nibble_pre != upper_nibble_post:
-                self.registers.set_H()
-            else:
-                self.registers.clear_H()
-
-        elif opcode == 0x1F: # RRA
-            print(F"> RRA")
-            bottom_bit = self.registers.A & 1
-            self.registers.A = (self.registers.A >> 1) | (self.registers.read_C() << 7)
-            if bottom_bit:
-                self.registers.set_C()
-            else:
-                self.registers.clear_C()
-            self.registers.clear_Z()
-            self.registers.clear_N()
-            self.registers.clear_H()
 
         # The instructions CALL, PUSH, and RST all put
         # information onto the stack. The instructions POP, RET,
