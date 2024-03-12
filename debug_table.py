@@ -24,6 +24,7 @@ def main():
     text = ""
     for opcode in range(0x00, 0x100):
         bin_str = f"{opcode:02X}"
+        # bin_str = f"{opcode:08b}"
         if 0x40 <= opcode < 0x80:
             src_reg_i = opcode & 0x7
             src_reg = src_regs.get(src_reg_i, None)
@@ -59,29 +60,32 @@ def main():
             else:
                 text += txt(f"{bin_str}")
 
-        # elif 0x80 <= opcode < 0xC0:
-        #     src_reg_i = opcode & 0x7
-        #     src_reg = src_regs.get(src_reg_i, None)
-        #     if src_reg is None:
-        #         src_reg = "(HL)"
-        #     if (opcode >> 3) == 0x10:
-        #         text += txt(f"% y ADD {src_reg}")
-        #     elif (opcode >> 3) == 0x11:
-        #         text += txt(f"% y ADC {src_reg}")
-        #     elif (opcode >> 3) == 0x12:
-        #         text += txt(f"% y SUB {src_reg}")
-        #     elif (opcode >> 3) == 0x13:
-        #         text += txt(f"% y SBC {src_reg}")
-        #     elif (opcode >> 3) == 0x14:
-        #         text += txt(f"% y AND {src_reg}")
-        #     elif (opcode >> 3) == 0x15:
-        #         text += txt(f"% y XOR {src_reg}")
-        #     elif (opcode >> 3) == 0x16:
-        #         text += txt(f"% y OR {src_reg}")
-        #     elif (opcode >> 3) == 0x17:
-        #         text += txt(f"% y CP {src_reg}")
-        #     else:
-        #         text += txt(f"% y {bin_str}")
+        elif 0x80 <= opcode < 0xC0:
+            src_reg_i = opcode & 0x7
+            src_reg = src_regs.get(src_reg_i, None)
+            if src_reg is None:
+                src_reg = "(HL)"
+            if (opcode >> 3) == 0x10:
+                text += txt(f"% y ADD {src_reg}")
+            elif (opcode >> 3) == 0x11:
+                text += txt(f"% y ADC {src_reg}")
+            elif (opcode >> 3) == 0x12:
+                text += txt(f"% y SUB {src_reg}")
+            elif (opcode >> 3) == 0x13:
+                text += txt(f"% y SBC {src_reg}")
+            elif (opcode >> 3) == 0x14:
+                text += txt(f"% y AND {src_reg}")
+            elif (opcode >> 3) == 0x15:
+                text += txt(f"% y XOR {src_reg}")
+            elif (opcode >> 3) == 0x16:
+                text += txt(f"% y OR {src_reg}")
+            elif (opcode >> 3) == 0x17:
+                text += txt(f"% y CP {src_reg}")
+            else:
+                text += txt(f"% y {bin_str}")
+
+        elif opcode & 0xC6 == 0x04:
+            text += txt(f"% y {bin_str}")
         else:
             text += txt(f"{bin_str}")
 

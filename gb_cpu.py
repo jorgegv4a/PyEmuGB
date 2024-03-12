@@ -77,8 +77,14 @@ class CPU:
             # TODO: stop clock, disable LCD, wait until joypad interrupt
         # -- LOADS
         # ---- LOAD FROM SINGLE REGISTER TO SINGLE REGISTER
-        if (0x40 <= opcode < 0x80) and opcode != 0x76:
+        elif (0x40 <= opcode < 0x80) and opcode != 0x76:
             self._handle_no_param_loads(opcode)
+
+        elif 0x80 <= opcode < 0xC0:
+            self._handle_no_param_alu(opcode)
+
+        elif opcode & 0xC6 == 0x04:
+            self._handle_inc_dec_uint8(opcode)
 
         # ---- LOAD FROM DOUBLE IMMEDIATE TO DOUBLE REGISTER
         elif opcode == 0x01: # LD BC, d16
@@ -181,43 +187,6 @@ class CPU:
             self.registers.A = self.memory[immediate]
 
         # -- ARITHMETIC AND LOGIC
-        # ---- A AND SINGLE REGISTER
-        elif opcode == 0xA7:  # AND A
-            print(F"> AND A")
-            self.registers.A &= self.registers.A
-            self.registers.set_H()
-            if self.registers.A == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            self.registers.set_H()
-            self.registers.clear_C()
-            self.registers.clear_N()
-
-        elif opcode == 0xA1:  # AND C
-            print(F"> AND C")
-            self.registers.A &= self.registers.C
-            self.registers.set_H()
-            if self.registers.A == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            self.registers.set_H()
-            self.registers.clear_C()
-            self.registers.clear_N()
-
-        elif opcode == 0xA5:  # AND L
-            print(F"> AND L")
-            self.registers.A &= self.registers.L
-            self.registers.set_H()
-            if self.registers.A == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            self.registers.set_H()
-            self.registers.clear_C()
-            self.registers.clear_N()
-
         # ---- A AND SINGLE IMMEDIATE
         elif opcode == 0xE6:  # AND d8
             immediate = extra_bytes[0]
@@ -229,95 +198,6 @@ class CPU:
             else:
                 self.registers.clear_Z()
             self.registers.clear_C()
-            self.registers.clear_N()
-
-        # ---- A OR SINGLE IMMEDIATE
-        elif opcode == 0xB0:  # OR B
-            print(F"> OR B")
-            self.registers.A |= self.registers.B
-            if self.registers.A == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            self.registers.clear_C()
-            self.registers.clear_H()
-            self.registers.clear_N()
-
-        elif opcode == 0xB1:  # OR C
-            print(F"> OR C")
-            self.registers.A |= self.registers.C
-            if self.registers.A == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            self.registers.clear_C()
-            self.registers.clear_H()
-            self.registers.clear_N()
-
-        # ---- A XOR SINGLE REGISTER
-        elif opcode == 0xAF:  # XOR A
-            print("> XOR A")
-            self.registers.A ^= self.registers.A
-
-            if self.registers.A == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            self.registers.clear_N()
-            self.registers.clear_H()
-            self.registers.clear_C()
-
-        elif opcode == 0xA9:  # XOR C
-            print("> XOR C")
-            self.registers.A ^= self.registers.C
-
-            if self.registers.A == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            self.registers.clear_N()
-            self.registers.clear_H()
-            self.registers.clear_C()
-
-        # ---- ADD SINGLE REGISTER TO SINGLE REGISTER
-        elif opcode == 0x87:  # ADD A, A
-            print(F"> ADD A, A")
-            value_pre = self.registers.A
-            upper_nibble_pre = (self.registers.A >> 4) & 0xF
-            self.registers.A += self.registers.A
-            upper_nibble_post = (self.registers.A >> 4) & 0xF
-            if upper_nibble_pre != upper_nibble_post:
-                self.registers.set_H()
-            else:
-                self.registers.clear_H()
-            if self.registers.A == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            if value_pre > self.registers.A:
-                self.registers.set_C()
-            else:
-                self.registers.clear_C()
-            self.registers.clear_N()
-
-        elif opcode == 0x80:  # ADD A, B
-            print(F"> ADD A, B")
-            value_pre = self.registers.A
-            upper_nibble_pre = (self.registers.A >> 4) & 0xF
-            self.registers.A += self.registers.B
-            upper_nibble_post = (self.registers.A >> 4) & 0xF
-            if upper_nibble_pre != upper_nibble_post:
-                self.registers.set_H()
-            else:
-                self.registers.clear_H()
-            if self.registers.A == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            if value_pre > self.registers.A:
-                self.registers.set_C()
-            else:
-                self.registers.clear_C()
             self.registers.clear_N()
 
         # ---- ADD DOUBLE REGISTER TO DOUBLE REGISTER
@@ -338,108 +218,10 @@ class CPU:
                 self.registers.clear_C()
             self.registers.clear_N()
 
-        # SUBSTRACT WITH CARRY FROM SINGLE REGISTER
-        elif opcode == 0x9D:  # SBC A, L
-            print(F"> SBC A, L")
-            value_pre = self.registers.A
-            upper_nibble_pre = (self.registers.A >> 4) & 0xF
-            self.registers.A -= self.registers.L + self.registers.read_C()
-            upper_nibble_post = (self.registers.A >> 4) & 0xF
-            if upper_nibble_pre != upper_nibble_post:
-                self.registers.set_H()
-            else:
-                self.registers.clear_H()
-            if self.registers.A == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            if value_pre < self.registers.A:
-                self.registers.set_C()
-            else:
-                self.registers.clear_C()
-            self.registers.set_N()
-
-        # ---- INCREMENT SINGLE REGISTER
-        elif opcode == 0x04:  # INC B
-            print(F"> INC B")
-            upper_nibble_pre = (self.registers.B >> 4) & 0xF
-            self.registers.B += 1
-            upper_nibble_post = (self.registers.B >> 4) & 0xF
-            self.registers.clear_N()
-            if self.registers.B == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            if upper_nibble_pre != upper_nibble_post:
-                self.registers.set_H()
-            else:
-                self.registers.clear_H()
-
-        elif opcode == 0x0C:  # INC C
-            print(F"> INC C")
-            upper_nibble_pre = (self.registers.C >> 4) & 0xF
-            self.registers.C += 1
-            upper_nibble_post = (self.registers.C >> 4) & 0xF
-            self.registers.clear_N()
-            if self.registers.C == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            if upper_nibble_pre != upper_nibble_post:
-                self.registers.set_H()
-            else:
-                self.registers.clear_H()
-
         # ---- INCREMENT DOUBLE REGISTER
         elif opcode == 0x23:  # INC HL
             print(F"> INC HL")
             self.registers.HL += 1
-
-        # ---- DECREMENT SINGLE REGISTER
-        elif opcode == 0x3D: # DEC A
-            print(F"> DEC A")
-            upper_nibble_pre = (self.registers.A >> 4) & 0xF
-            self.registers.A -= 1
-            upper_nibble_post = (self.registers.A >> 4) & 0xF
-            self.registers.set_N()
-            if self.registers.A == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            if upper_nibble_pre != upper_nibble_post:
-                self.registers.set_H()
-            else:
-                self.registers.clear_H()
-
-        elif opcode == 0x05: # DEC B
-            print(F"> DEC B")
-            upper_nibble_pre = (self.registers.B >> 4) & 0xF
-            self.registers.B -= 1
-            upper_nibble_post = (self.registers.B >> 4) & 0xF
-            self.registers.set_N()
-            if self.registers.B == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            if upper_nibble_pre != upper_nibble_post:
-                self.registers.set_H()
-            else:
-                self.registers.clear_H()
-
-        elif opcode == 0x0D: # DEC C
-            print(F"> DEC C")
-            upper_nibble_pre = (self.registers.C >> 4) & 0xF
-            self.registers.C -= 1
-            upper_nibble_post = (self.registers.C >> 4) & 0xF
-            self.registers.set_N()
-            if self.registers.C == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            if upper_nibble_pre != upper_nibble_post:
-                self.registers.set_H()
-            else:
-                self.registers.clear_H()
 
         # ---- DECREMENT DOUBLE REGISTER
         elif opcode == 0x0B: # DEC BC
@@ -732,12 +514,10 @@ class CPU:
         else:
             raise ValueError(f"Unexpected opcode {opcode}, expected generic load instruction!")
 
-    def _add_r8(self, src_reg: str):
-        print(f"> ADD {src_reg}")
+    def _add_uint8(self, operand_byte: int):
         value_pre = self.registers.A
-        operand_value = getattr(self.registers, src_reg)
         upper_nibble_pre = (self.registers.A >> 4) & 0xF
-        self.registers.A += operand_value
+        self.registers.A += operand_byte
         upper_nibble_post = (self.registers.A >> 4) & 0xF
         if upper_nibble_pre != upper_nibble_post:
             self.registers.set_H()
@@ -753,12 +533,10 @@ class CPU:
             self.registers.clear_C()
         self.registers.clear_N()
 
-    def _add_HL(self):
-        print(f"> ADD (HL)")
+    def _add_with_carry_uint8(self, operand_byte: int):
         value_pre = self.registers.A
-        operand_value = self.memory[self.registers.HL]
         upper_nibble_pre = (self.registers.A >> 4) & 0xF
-        self.registers.A += operand_value
+        self.registers.A += operand_byte + self.registers.read_C()
         upper_nibble_post = (self.registers.A >> 4) & 0xF
         if upper_nibble_pre != upper_nibble_post:
             self.registers.set_H()
@@ -774,12 +552,10 @@ class CPU:
             self.registers.clear_C()
         self.registers.clear_N()
 
-    def _subtract_with_carry_r8(self, src_reg: str):
-        print(F"> SBC {src_reg}")
+    def _subtract_uint8(self, operand_byte: int):
         value_pre = self.registers.A
-        operand_value = getattr(self.registers, src_reg)
         upper_nibble_pre = (self.registers.A >> 4) & 0xF
-        self.registers.A -= operand_value + self.registers.read_C()
+        self.registers.A -= operand_byte
         upper_nibble_post = (self.registers.A >> 4) & 0xF
         if upper_nibble_pre != upper_nibble_post:
             self.registers.set_H()
@@ -795,12 +571,10 @@ class CPU:
             self.registers.clear_C()
         self.registers.set_N()
 
-    def _subtract_with_carry_HL(self):
-        print(F"> SBC (HL)")
+    def _subtract_with_carry_uint8(self, operand_byte: int):
         value_pre = self.registers.A
-        operand_value = self.memory[self.registers.HL]
         upper_nibble_pre = (self.registers.A >> 4) & 0xF
-        self.registers.A -= operand_value + self.registers.read_C()
+        self.registers.A -= operand_byte + self.registers.read_C()
         upper_nibble_post = (self.registers.A >> 4) & 0xF
         if upper_nibble_pre != upper_nibble_post:
             self.registers.set_H()
@@ -811,6 +585,56 @@ class CPU:
         else:
             self.registers.clear_Z()
         if value_pre < self.registers.A:
+            self.registers.set_C()
+        else:
+            self.registers.clear_C()
+        self.registers.set_N()
+
+    def _and_uint8(self, operand_byte: int):
+        self.registers.A &= operand_byte
+        self.registers.set_H()
+        if self.registers.A == 0:
+            self.registers.set_Z()
+        else:
+            self.registers.clear_Z()
+        self.registers.set_H()
+        self.registers.clear_C()
+        self.registers.clear_N()
+
+    def _xor_uint8(self, operand_byte: int):
+        self.registers.A ^= operand_byte
+        if self.registers.A == 0:
+            self.registers.set_Z()
+        else:
+            self.registers.clear_Z()
+        self.registers.clear_N()
+        self.registers.clear_H()
+        self.registers.clear_C()
+
+    def _or_uint8(self, operand_byte: int):
+        self.registers.A |= operand_byte
+        if self.registers.A == 0:
+            self.registers.set_Z()
+        else:
+            self.registers.clear_Z()
+        self.registers.clear_C()
+        self.registers.clear_H()
+        self.registers.clear_N()
+
+    def _compare_uint8(self, operand_byte: int):
+        value_pre = self.registers.A
+        upper_nibble_pre = (value_pre >> 4) & 0xF
+        value = (self.registers.A + ((operand_byte ^ 0xFF) + 1) & 0xFF) & 0xFF
+        upper_nibble_post = (value >> 4) & 0xF
+        if upper_nibble_pre != upper_nibble_post:
+            self.registers.set_H()
+        else:
+            self.registers.clear_H()
+        if value == 0:
+            self.registers.set_Z()
+        else:
+            self.registers.clear_Z()
+        if value_pre < value:
             self.registers.set_C()
         else:
             self.registers.clear_C()
@@ -824,29 +648,95 @@ class CPU:
         """
         src_reg_i = opcode & 0x7
         src_reg = SR_map.get(src_reg_i, None)
+        if src_reg is None:
+            operand_value = self.memory[self.registers.HL]
+            operand_repr = "(HL)"
+        else:
+            operand_value = getattr(self.registers, src_reg)
+            operand_repr = src_reg
 
         if (opcode >> 3) == 0x10:
-            if src_reg is None:
-                self._add_HL()
-            else:
-                self._add_r8(src_reg)
+            print(f"> ADD {operand_repr}")
+            self._add_uint8(operand_value)
         elif (opcode >> 3) == 0x11:
-            text += txt(f"% y ADC {src_reg}")
+            print(f"> ADC {operand_repr}")
+            self._add_with_carry_uint8(operand_value)
         elif (opcode >> 3) == 0x12:
-            text += txt(f"% y SUB {src_reg}")
+            print(f"> SUB {operand_repr}")
+            self._subtract_uint8(operand_value)
         elif (opcode >> 3) == 0x13:
-            if src_reg is None:
-                self._subtract_with_carry_HL()
-            else:
-                self._subtract_with_carry_r8(src_reg)
+            print(f"> SBC {operand_repr}")
+            self._subtract_with_carry_uint8(operand_value)
         elif (opcode >> 3) == 0x14:
-            text += txt(f"% y AND {src_reg}")
+            print(f"> AND {operand_repr}")
+            self._and_uint8(operand_value)
         elif (opcode >> 3) == 0x15:
-            text += txt(f"% y XOR {src_reg}")
+            print(f"> XOR {operand_repr}")
+            self._xor_uint8(operand_value)
         elif (opcode >> 3) == 0x16:
-            text += txt(f"% y OR {src_reg}")
+            print(f"> OR {operand_repr}")
+            self._or_uint8(operand_value)
         elif (opcode >> 3) == 0x17:
-            text += txt(f"% y CP {src_reg}")
+            print(f"> CP {operand_repr}")
+            self._compare_uint8(operand_value)
+        else:
+            raise ValueError(f"Unexpected opcode {opcode}, expected generic ALU instruction!")
+
+    def _handle_inc_dec_uint8(self, opcode: int):
+        """
+        Handles INC/DEC instructions for single register or indirect memory address
+        :param opcode:
+        :return:
+        """
+        dst_reg_i = (opcode >> 3) & 0x7
+        dst_reg = SR_map.get(dst_reg_i, None)
+        if dst_reg is None:
+            operand_value = self.memory[self.registers.HL]
+            operand_repr = "(HL)"
+        else:
+            operand_value = getattr(self.registers, dst_reg)
+            operand_repr = dst_reg
+
+        if opcode & 1 == 0:
+            print(f"> INC {operand_repr}")
+            upper_nibble_pre = (operand_value >> 4) & 0xF
+            new_value = operand_value + 1
+            if dst_reg is None:
+                self.memory[self.registers.HL] = new_value
+                new_value = self.memory[self.registers.HL]  # set again to guarantee overflow works alright
+            else:
+                setattr(self.registers, dst_reg, new_value)
+                new_value = getattr(self.registers, dst_reg) # set again to guarantee overflow works alright
+            upper_nibble_post = (new_value >> 4) & 0xF
+            self.registers.clear_N()
+            if new_value == 0:
+                self.registers.set_Z()
+            else:
+                self.registers.clear_Z()
+            if upper_nibble_pre != upper_nibble_post:
+                self.registers.set_H()
+            else:
+                self.registers.clear_H()
+        elif opcode & 1 == 1:
+            print(f"> DEC {operand_repr}")
+            upper_nibble_pre = (operand_value >> 4) & 0xF
+            new_value = operand_value + 1
+            if dst_reg is None:
+                self.memory[self.registers.HL] = new_value
+                new_value = self.memory[self.registers.HL]  # set again to guarantee overflow works alright
+            else:
+                setattr(self.registers, dst_reg, new_value)
+                new_value = getattr(self.registers, dst_reg)  # set again to guarantee overflow works alright
+            upper_nibble_post = (new_value >> 4) & 0xF
+            self.registers.set_N()
+            if new_value == 0:
+                self.registers.set_Z()
+            else:
+                self.registers.clear_Z()
+            if upper_nibble_pre != upper_nibble_post:
+                self.registers.set_H()
+            else:
+                self.registers.clear_H()
         else:
             raise ValueError(f"Unexpected opcode {opcode}, expected generic ALU instruction!")
 
