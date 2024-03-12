@@ -240,7 +240,7 @@ class DoubleRegister:
     def __setattr__(self, key, value):
         if key == 'value':
             if value < 0:
-                raise ValueError('Value must be greater than or equal to 0')
+                value = (abs(value) ^ 0xFFFF) + 1
             if value > self.max_value:
                 raise ValueError(f'Value must be less than or equal to {self.max_value}')
         super().__setattr__(key, value)
