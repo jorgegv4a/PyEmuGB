@@ -5,6 +5,16 @@ from gb_ops import opcodes
 from gb_constants import CARTRIDGE_ROM_ONLY
 from gb_graphics import LCDController, get_tiles
 
+SR_map = {
+    0: 'B',
+    1: 'C',
+    2: 'D',
+    3: 'E',
+    4: 'H',
+    5: 'L',
+    7: 'A',
+}
+
 
 class CPU:
     def __init__(self, game_rom: bytes):
@@ -67,29 +77,8 @@ class CPU:
             # TODO: stop clock, disable LCD, wait until joypad interrupt
         # -- LOADS
         # ---- LOAD FROM SINGLE REGISTER TO SINGLE REGISTER
-        elif opcode == 0x47:  # LD B, A
-            print(F"> LD B, A")
-            self.registers.B = self.registers.A
-
-        elif opcode == 0x4F:  # LD C, A
-            print(F"> LD C, A")
-            self.registers.C = self.registers.A
-
-        elif opcode == 0x5F:  # LD E, A
-            print(F"> LD E, A")
-            self.registers.E = self.registers.A
-
-        elif opcode == 0x67: # LD H, A
-            print(F"> LD H, A")
-            self.registers.H = self.registers.A
-
-        elif opcode == 0x78: # LD A, B
-            print(F"> LD A, B")
-            self.registers.A = self.registers.B
-
-        elif opcode == 0x79: # LD A, C
-            print(F"> LD A, C")
-            self.registers.A = self.registers.C
+        if (0x40 <= opcode < 0x80) and opcode != 0x76:
+            self._handle_no_param_loads(opcode)
 
         # ---- LOAD FROM DOUBLE IMMEDIATE TO DOUBLE REGISTER
         elif opcode == 0x01: # LD BC, d16
@@ -172,14 +161,6 @@ class CPU:
             print(F"> LD A, (HL+)")
             self.registers.A = self.memory[self.registers.HL]
             self.registers.HL += 1
-
-        elif opcode == 0x56: # LD D, (HL)
-            print(F"> LD D, (HL)")
-            self.registers.D = self.memory[self.registers.HL]
-
-        elif opcode == 0x5E: # LD E, (HL)
-            print(F"> LD E, (HL)")
-            self.registers.E = self.memory[self.registers.HL]
 
         # ---- LOAD FROM DOUBLE IMMEDIATE INDIRECT ADDRESS TO SINGLE REGISTER
         elif opcode == 0xFA: # LD A, (a16)
@@ -713,6 +694,161 @@ class CPU:
                 instr_str += f", {opcode_dict['operand2']}"
             print(f"\t{instr_str}")
             self.execute(opcode, opcode_dict)
+
+    def _load_from_HL(self, src_reg: str):
+        print(f"> LD (HL), {src_reg}")
+        value = getattr(self.registers, src_reg)
+        self.memory[self.registers.HL] = value
+
+    def _load_to_HL(self, dst_reg: str):
+        print(f"> LD {dst_reg}, (HL)")
+        # self.registers.D = self.memory[self.registers.HL]
+        value = self.memory[self.registers.HL]
+        setattr(self.registers, dst_reg, value)
+
+    def _load_r8_to_r8(self, dst_reg: str, src_reg: str):
+        print(f"> LD {dst_reg}, {src_reg}")
+        value = getattr(self.registers, src_reg)
+        setattr(self.registers, dst_reg, value)
+
+    def _handle_no_param_loads(self, opcode: int):
+        """
+        Handles instructions in the big single register load group (0x40 - 0x7F)
+        :param opcode:
+        :return:
+        """
+        src_reg_i = opcode & 0x7
+        src_reg = SR_map.get(src_reg_i, None)
+
+        dst_reg_i = (opcode >> 3) & 0x7
+        dst_reg = SR_map.get(dst_reg_i, None)
+        if (opcode >> 6) & 0x03 == 1:
+            if src_reg is None:
+                self._load_to_HL(dst_reg)
+            elif dst_reg is None:
+                self._load_from_HL(src_reg)
+            else:
+                self._load_r8_to_r8(dst_reg, src_reg)
+        else:
+            raise ValueError(f"Unexpected opcode {opcode}, expected generic load instruction!")
+
+    def _add_r8(self, src_reg: str):
+        print(f"> ADD {src_reg}")
+        value_pre = self.registers.A
+        operand_value = getattr(self.registers, src_reg)
+        upper_nibble_pre = (self.registers.A >> 4) & 0xF
+        self.registers.A += operand_value
+        upper_nibble_post = (self.registers.A >> 4) & 0xF
+        if upper_nibble_pre != upper_nibble_post:
+            self.registers.set_H()
+        else:
+            self.registers.clear_H()
+        if self.registers.A == 0:
+            self.registers.set_Z()
+        else:
+            self.registers.clear_Z()
+        if value_pre > self.registers.A:
+            self.registers.set_C()
+        else:
+            self.registers.clear_C()
+        self.registers.clear_N()
+
+    def _add_HL(self):
+        print(f"> ADD (HL)")
+        value_pre = self.registers.A
+        operand_value = self.memory[self.registers.HL]
+        upper_nibble_pre = (self.registers.A >> 4) & 0xF
+        self.registers.A += operand_value
+        upper_nibble_post = (self.registers.A >> 4) & 0xF
+        if upper_nibble_pre != upper_nibble_post:
+            self.registers.set_H()
+        else:
+            self.registers.clear_H()
+        if self.registers.A == 0:
+            self.registers.set_Z()
+        else:
+            self.registers.clear_Z()
+        if value_pre > self.registers.A:
+            self.registers.set_C()
+        else:
+            self.registers.clear_C()
+        self.registers.clear_N()
+
+    def _subtract_with_carry_r8(self, src_reg: str):
+        print(F"> SBC {src_reg}")
+        value_pre = self.registers.A
+        operand_value = getattr(self.registers, src_reg)
+        upper_nibble_pre = (self.registers.A >> 4) & 0xF
+        self.registers.A -= operand_value + self.registers.read_C()
+        upper_nibble_post = (self.registers.A >> 4) & 0xF
+        if upper_nibble_pre != upper_nibble_post:
+            self.registers.set_H()
+        else:
+            self.registers.clear_H()
+        if self.registers.A == 0:
+            self.registers.set_Z()
+        else:
+            self.registers.clear_Z()
+        if value_pre < self.registers.A:
+            self.registers.set_C()
+        else:
+            self.registers.clear_C()
+        self.registers.set_N()
+
+    def _subtract_with_carry_HL(self):
+        print(F"> SBC (HL)")
+        value_pre = self.registers.A
+        operand_value = self.memory[self.registers.HL]
+        upper_nibble_pre = (self.registers.A >> 4) & 0xF
+        self.registers.A -= operand_value + self.registers.read_C()
+        upper_nibble_post = (self.registers.A >> 4) & 0xF
+        if upper_nibble_pre != upper_nibble_post:
+            self.registers.set_H()
+        else:
+            self.registers.clear_H()
+        if self.registers.A == 0:
+            self.registers.set_Z()
+        else:
+            self.registers.clear_Z()
+        if value_pre < self.registers.A:
+            self.registers.set_C()
+        else:
+            self.registers.clear_C()
+        self.registers.set_N()
+
+    def _handle_no_param_alu(self, opcode: int):
+        """
+        Handles instructions in the big single register arithmetic/logic group (0x80 - 0xBF)
+        :param opcode:
+        :return:
+        """
+        src_reg_i = opcode & 0x7
+        src_reg = SR_map.get(src_reg_i, None)
+
+        if (opcode >> 3) == 0x10:
+            if src_reg is None:
+                self._add_HL()
+            else:
+                self._add_r8(src_reg)
+        elif (opcode >> 3) == 0x11:
+            text += txt(f"% y ADC {src_reg}")
+        elif (opcode >> 3) == 0x12:
+            text += txt(f"% y SUB {src_reg}")
+        elif (opcode >> 3) == 0x13:
+            if src_reg is None:
+                self._subtract_with_carry_HL()
+            else:
+                self._subtract_with_carry_r8(src_reg)
+        elif (opcode >> 3) == 0x14:
+            text += txt(f"% y AND {src_reg}")
+        elif (opcode >> 3) == 0x15:
+            text += txt(f"% y XOR {src_reg}")
+        elif (opcode >> 3) == 0x16:
+            text += txt(f"% y OR {src_reg}")
+        elif (opcode >> 3) == 0x17:
+            text += txt(f"% y CP {src_reg}")
+        else:
+            raise ValueError(f"Unexpected opcode {opcode}, expected generic ALU instruction!")
 
     def __str__(self):
         return f'{self.registers} | IME: {self.IME} | T: {self.clock}'
