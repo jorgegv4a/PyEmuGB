@@ -5,7 +5,7 @@ from gb_ops import opcodes
 from gb_constants import CARTRIDGE_ROM_ONLY
 from gb_graphics import LCDController, get_tiles
 
-SR_map = {
+r8_map = {
     0: 'B',
     1: 'C',
     2: 'D',
@@ -13,6 +13,13 @@ SR_map = {
     4: 'H',
     5: 'L',
     7: 'A',
+}
+
+r16_map = {
+    0: 'BC',
+    1: 'DE',
+    2: 'HL',
+    3: 'AF',
 }
 
 
@@ -84,7 +91,7 @@ class CPU:
             self._handle_no_param_alu(opcode)
 
         elif opcode & 0xC6 == 0x04:
-            self._handle_inc_dec_uint8(opcode)
+            self._handle_inc_dec_r8(opcode)
 
         elif opcode & 0xC7 == 0xC6:
             self._handle_d8_alu(opcode, extra_bytes)
@@ -94,6 +101,15 @@ class CPU:
 
         elif opcode & 0xC7 == 0xC7:
             self._handle_reset_vector(opcode)
+
+        elif opcode & 0xCF == 0xC1:
+            self._handle_r16_pop(opcode)
+
+        elif opcode & 0xCF == 0xC5:
+            self._handle_r16_push(opcode)
+
+        elif opcode & 0xC7 == 0x03:
+            self._handle_inc_dec_r16(opcode)
 
         # ---- LOAD FROM DOUBLE IMMEDIATE TO DOUBLE REGISTER
         elif opcode == 0x01: # LD BC, d16
@@ -444,10 +460,10 @@ class CPU:
         :return:
         """
         src_reg_i = opcode & 0x7
-        src_reg = SR_map.get(src_reg_i, None)
+        src_reg = r8_map.get(src_reg_i, None)
 
         dst_reg_i = (opcode >> 3) & 0x7
-        dst_reg = SR_map.get(dst_reg_i, None)
+        dst_reg = r8_map.get(dst_reg_i, None)
         if (opcode >> 6) & 0x03 == 1:
             if src_reg is None:
                 self._load_to_HL(dst_reg)
@@ -591,7 +607,7 @@ class CPU:
         :return:
         """
         src_reg_i = opcode & 0x7
-        src_reg = SR_map.get(src_reg_i, None)
+        src_reg = r8_map.get(src_reg_i, None)
         if src_reg is None:
             operand_value = self.memory[self.registers.HL]
             operand_repr = "(HL)"
@@ -626,14 +642,14 @@ class CPU:
         else:
             raise ValueError(f"Unexpected opcode {opcode}, expected generic ALU instruction!")
 
-    def _handle_inc_dec_uint8(self, opcode: int):
+    def _handle_inc_dec_r8(self, opcode: int):
         """
         Handles INC/DEC instructions for single register or indirect memory address
         :param opcode:
         :return:
         """
         dst_reg_i = (opcode >> 3) & 0x7
-        dst_reg = SR_map.get(dst_reg_i, None)
+        dst_reg = r8_map.get(dst_reg_i, None)
         if dst_reg is None:
             operand_value = self.memory[self.registers.HL]
             operand_repr = "(HL)"
@@ -664,7 +680,7 @@ class CPU:
         elif opcode & 1 == 1:
             print(f"> DEC {operand_repr}")
             upper_nibble_pre = (operand_value >> 4) & 0xF
-            new_value = operand_value + 1
+            new_value = operand_value - 1
             if dst_reg is None:
                 self.memory[self.registers.HL] = new_value
                 new_value = self.memory[self.registers.HL]  # set again to guarantee overflow works alright
@@ -729,13 +745,33 @@ class CPU:
         operand_value = extra_bytes[0]
 
         dst_reg_i = (opcode >> 3) & 0x7
-        dst_reg = SR_map.get(dst_reg_i, None)
+        dst_reg = r8_map.get(dst_reg_i, None)
         if dst_reg is None:
             print(f"> LD (HL), n")
             self.memory[self.registers.HL] = operand_value
         else:
             print(f"> LD {dst_reg}, n")
             self._load_to_r8(dst_reg, operand_value)
+
+    def _push_stack(self, d16_operand: int):
+        self.registers.SP -= 1
+        self.memory[self.registers.SP] = (d16_operand >> 8) & 0xFF
+        # tick(1)
+
+        self.registers.SP -= 1
+        self.memory[self.registers.SP] = d16_operand & 0xFF
+        # tick(1)
+
+    def _pop_stack(self) -> int:
+        # d16_value = (self.memory[self.registers.SP + 1] << 8) | self.memory[self.registers.SP]
+        d16_value = self.memory[self.registers.SP]
+        self.registers.SP += 1
+        # tick(1)
+
+        d16_value |= self.memory[self.registers.SP] << 8
+        self.registers.SP += 1
+        # tick(1)
+        return d16_value
 
     def _handle_reset_vector(self, opcode: int):
         """
@@ -746,10 +782,57 @@ class CPU:
         # 0b11xxx111
         dst_address = (opcode >> 3) * 8
         print(f"> RST 0x{dst_address:02X}")
-        self.registers.SP -= 2
-        self.memory[self.registers.SP + 1] = (self.registers.PC >> 8) & 0xFF
-        self.memory[self.registers.SP] = self.registers.PC & 0xFF
+        self._push_stack(self.registers.PC)
         self.registers.write_PC(dst_address)
+        # tick(1)
+
+    def _handle_r16_pop(self, opcode: int):
+        """
+        Handles double register POP instructions
+        :param opcode:
+        :return:
+        """
+        dst_reg_i = (opcode >> 4) & 0x3
+        dst_reg = r16_map[dst_reg_i]
+        print(f"> POP {dst_reg}")
+
+        d16_value = self._pop_stack()
+        setattr(self.registers, dst_reg, d16_value)
+
+    def _handle_r16_push(self, opcode: int):
+        """
+        Handles double register PUSH instructions
+        :param opcode:
+        :return:
+        """
+        src_reg_i = (opcode >> 4) & 0x3
+        src_reg = r16_map[src_reg_i]
+        print(f"> PUSH {src_reg}")
+
+        d16_operand = getattr(self.registers, src_reg)
+        self._push_stack(d16_operand)
+
+    def _handle_inc_dec_r16(self, opcode: int):
+        """
+        Handles INC/DEC instructions for double register or indirect memory address
+        :param opcode:
+        :return:
+        """
+        dst_reg_i = (opcode >> 4) & 0x5
+        dst_reg = r16_map[dst_reg_i]
+        operand_value = getattr(self.registers, dst_reg)
+        operand_repr = dst_reg
+
+        if (opcode >> 3) & 1 == 0:
+            print(f"> INC {operand_repr}")
+            new_value = operand_value + 1
+        elif (opcode >> 3) & 1 == 1:
+            print(f"> DEC {operand_repr}")
+            new_value = operand_value - 1
+        else:
+            raise ValueError(f"Unexpected opcode {opcode}, expected generic ALU instruction!")
+
+        setattr(self.registers, dst_reg, new_value)
 
     def __str__(self):
         return f'{self.registers} | IME: {self.IME} | T: {self.clock}'
