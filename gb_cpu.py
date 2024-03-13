@@ -111,6 +111,9 @@ class CPU:
         elif opcode & 0xC7 == 0x03:
             self._handle_inc_dec_r16(opcode)
 
+        elif opcode & 0xCF == 0x09:
+            self._handle_add_r16(opcode)
+
         # ---- LOAD FROM DOUBLE IMMEDIATE TO DOUBLE REGISTER
         elif opcode == 0x01: # LD BC, d16
             immediate = (extra_bytes[1] << 8) | extra_bytes[0]
@@ -185,34 +188,6 @@ class CPU:
             self.registers.A = self.memory[immediate]
 
         # -- ARITHMETIC AND LOGIC
-        # ---- ADD DOUBLE REGISTER TO DOUBLE REGISTER
-        elif opcode == 0x19:  # ADD HL, DE
-            print(F"> ADD HL, DE")
-            value_pre = self.registers.HL
-            # 16 bit addition uses the 8 bit ALU, LSB first then MSB, so the resulting flags apply to the high byte
-            upper_nibble_pre = (self.registers.H >> 4) & 0xF
-            self.registers.HL += self.registers.DE
-            upper_nibble_post = (self.registers.H >> 4) & 0xF
-            if upper_nibble_pre != upper_nibble_post:
-                self.registers.set_H()
-            else:
-                self.registers.clear_H()
-            if value_pre > self.registers.HL:
-                self.registers.set_C()
-            else:
-                self.registers.clear_C()
-            self.registers.clear_N()
-
-        # ---- INCREMENT DOUBLE REGISTER
-        elif opcode == 0x23:  # INC HL
-            print(F"> INC HL")
-            self.registers.HL += 1
-
-        # ---- DECREMENT DOUBLE REGISTER
-        elif opcode == 0x0B: # DEC BC
-            print(F"> DEC BC")
-            self.registers.BC -= 1
-
         # ---- COMPLEMENT A
         elif opcode == 0x2F: # CPL
             print(f"> CPL")
@@ -334,36 +309,6 @@ class CPU:
         elif opcode == 0xFB: # EI
             print(f"> EI")
             self.IME = 1 # TODO: should be done after the next cycle, not immediately
-
-        # ---- STACK PUSH/POP
-        elif opcode == 0xE1: # POP HL
-            print(F"> POP HL")
-            self.registers.HL = (self.memory[self.registers.SP + 1] << 8) | self.memory[self.registers.SP]
-            self.registers.SP += 2
-
-        elif opcode == 0xF5: # PUSH AF
-            print(F"> PUSH AF")
-            self.registers.SP -= 2
-            self.memory[self.registers.SP + 1] = self.registers.A
-            self.memory[self.registers.SP] = self.registers.F
-
-        elif opcode == 0xC5: # PUSH BC
-            print(F"> PUSH BC")
-            self.registers.SP -= 2
-            self.memory[self.registers.SP + 1] = self.registers.B
-            self.memory[self.registers.SP] = self.registers.C
-
-        elif opcode == 0xD5: # PUSH DE
-            print(F"> PUSH DE")
-            self.registers.SP -= 2
-            self.memory[self.registers.SP + 1] = self.registers.D
-            self.memory[self.registers.SP] = self.registers.E
-
-        elif opcode == 0xE5: # PUSH HL
-            print(F"> PUSH HL")
-            self.registers.SP -= 2
-            self.memory[self.registers.SP + 1] = self.registers.H
-            self.memory[self.registers.SP] = self.registers.L
 
         # The instructions CALL, PUSH, and RST all put
         # information onto the stack. The instructions POP, RET,
@@ -780,7 +725,7 @@ class CPU:
         :return:
         """
         # 0b11xxx111
-        dst_address = (opcode >> 3) * 8
+        dst_address = ((opcode >> 3) & 0x7) * 8
         print(f"> RST 0x{dst_address:02X}")
         self._push_stack(self.registers.PC)
         self.registers.write_PC(dst_address)
@@ -833,6 +778,33 @@ class CPU:
             raise ValueError(f"Unexpected opcode {opcode}, expected generic ALU instruction!")
 
         setattr(self.registers, dst_reg, new_value)
+
+    def _handle_add_r16(self, opcode: int):
+        """
+        Handles ADD instructions for double register
+        :param opcode:
+        :return:
+        """
+        dst_reg_i = (opcode >> 4) & 0x5
+        dst_reg = r16_map[dst_reg_i]
+        operand_value = getattr(self.registers, dst_reg)
+        operand_repr = dst_reg
+
+        print(F"> ADD HL, {operand_repr}")
+        value_pre = self.registers.HL
+        # 16 bit addition uses the 8 bit ALU, LSB first then MSB, so the resulting flags apply to the high byte
+        upper_nibble_pre = (self.registers.H >> 4) & 0xF
+        self.registers.HL += operand_value
+        upper_nibble_post = (self.registers.H >> 4) & 0xF
+        if upper_nibble_pre != upper_nibble_post:
+            self.registers.set_H()
+        else:
+            self.registers.clear_H()
+        if value_pre > self.registers.HL:
+            self.registers.set_C()
+        else:
+            self.registers.clear_C()
+        self.registers.clear_N()
 
     def __str__(self):
         return f'{self.registers} | IME: {self.IME} | T: {self.clock}'

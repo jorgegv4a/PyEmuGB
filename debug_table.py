@@ -105,6 +105,9 @@ def main():
         elif opcode & 0xC7 == 0x03:
             text += txt(f"% m {bin_str}")
 
+        elif opcode & 0xCF == 0x09:
+            text += txt(f"% M {bin_str}")
+
         else:
             text += txt(f"{bin_str}")
 
