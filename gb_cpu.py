@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, List
 
 from gb_memory import AddressSpace, RegisterBank
 from gb_ops import opcodes
@@ -86,6 +86,15 @@ class CPU:
         elif opcode & 0xC6 == 0x04:
             self._handle_inc_dec_uint8(opcode)
 
+        elif opcode & 0xC7 == 0xC6:
+            self._handle_d8_alu(opcode, extra_bytes)
+
+        elif opcode & 0xC7 == 0x06:
+            self._handle_d8_loads(opcode, extra_bytes)
+
+        elif opcode & 0xC7 == 0xC7:
+            self._handle_reset_vector(opcode)
+
         # ---- LOAD FROM DOUBLE IMMEDIATE TO DOUBLE REGISTER
         elif opcode == 0x01: # LD BC, d16
             immediate = (extra_bytes[1] << 8) | extra_bytes[0]
@@ -102,38 +111,11 @@ class CPU:
             print(F"> LD SP, d16")
             self.registers.SP = immediate
 
-        # ---- LOAD FROM SINGLE IMMEDIATE TO SINGLE REGISTER
-        elif opcode == 0x3E:  # LD A, d8
-            immediate = extra_bytes[0]
-            print(F"> LD A, 0x{immediate:02X}")
-            self.registers.A = immediate
-
-        elif opcode == 0x06: # LD B, d8
-            immediate = extra_bytes[0]
-            print(F"> LD B, 0x{immediate:02X}")
-            self.registers.B = immediate
-
-        elif opcode == 0x0E: # LD C, d8
-            immediate = extra_bytes[0]
-            print(F"> LD C, 0x{immediate:02X}")
-            self.registers.C = immediate
-
-        elif opcode == 0x16:  # LD D, d8
-            immediate = extra_bytes[0]
-            print(F"> LD D, d8")
-            self.registers.D = immediate
-
         # ---- LOAD FROM SINGLE REGISTER TO INDIRECT ADDRESS
         elif opcode == 0x32: # LD (HL-), A
             print(F"> LD (HL-), A")
             self.memory[self.registers.HL] = self.registers.A
             self.registers.HL -= 1
-
-        # ---- LOAD FROM SINGLE IMMEDIATE TO INDIRECT ADDRESS
-        elif opcode == 0x36: # LD (HL), d8
-            immediate = extra_bytes[0]
-            print(F"> LD (HL), d8")
-            self.memory[self.registers.HL] = immediate
 
         # ---- LOAD FROM SINGLE REGISTER TO DOUBLE IMMEDIATE INDIRECT ADDRESS
         elif opcode == 0xEA: # LD (a16), A
@@ -187,19 +169,6 @@ class CPU:
             self.registers.A = self.memory[immediate]
 
         # -- ARITHMETIC AND LOGIC
-        # ---- A AND SINGLE IMMEDIATE
-        elif opcode == 0xE6:  # AND d8
-            immediate = extra_bytes[0]
-            print(F"> AND d8")
-            self.registers.A &= immediate
-            self.registers.set_H()
-            if self.registers.A == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            self.registers.clear_C()
-            self.registers.clear_N()
-
         # ---- ADD DOUBLE REGISTER TO DOUBLE REGISTER
         elif opcode == 0x19:  # ADD HL, DE
             print(F"> ADD HL, DE")
@@ -233,28 +202,6 @@ class CPU:
             print(f"> CPL")
             self.registers.A ^= 0xFF
             self.registers.set_H()
-            self.registers.set_N()
-
-        # ---- COMPARE SINGLE IMMEDIATE
-        elif opcode == 0xFE: # CP d8
-            immediate = extra_bytes[0]
-            print(F"> CP (0x{immediate:02X}), A")
-            value_pre = self.registers.A
-            upper_nibble_pre = (value_pre >> 4) & 0xF
-            value = (self.registers.A + ((immediate ^ 0xFF) + 1) & 0xFF) & 0xFF
-            upper_nibble_post = (value >> 4) & 0xF
-            if upper_nibble_pre != upper_nibble_post:
-                self.registers.set_H()
-            else:
-                self.registers.clear_H()
-            if value == 0:
-                self.registers.set_Z()
-            else:
-                self.registers.clear_Z()
-            if value_pre < value:
-                self.registers.set_C()
-            else:
-                self.registers.clear_C()
             self.registers.set_N()
 
         # -- ROTATES AND SHIFTS
@@ -344,14 +291,6 @@ class CPU:
                 self.registers.write_PC(self.registers.PC + immediate)
             else:
                 remaining_cycles = opcode_dict["cycles"][1] - (self.clock - start_clock_t)
-
-        # ---- RESET VECTOR $28
-        elif opcode == 0xEF:  # RST $28
-            print(F"> RST $28")
-            self.registers.SP -= 2
-            self.memory[self.registers.SP + 1] = (self.registers.PC >> 8) & 0xFF
-            self.memory[self.registers.SP] = self.registers.PC & 0xFF
-            self.registers.write_PC(0x0028)
 
         # ---- CALL DOUBLE INMMEDIATE
         elif opcode == 0xCD:  # CALL a16
@@ -477,21 +416,26 @@ class CPU:
             print(f"\t{instr_str}")
             self.execute(opcode, opcode_dict)
 
-    def _load_from_HL(self, src_reg: str):
+    def _load_to_r8(self, dst_reg: str, value: int):
+        setattr(self.registers, dst_reg, value)
+
+    def _read_r8(self, src_reg: str) -> int:
+        return getattr(self.registers, src_reg)
+
+    def _load_to_HL(self, src_reg: str):
         print(f"> LD (HL), {src_reg}")
-        value = getattr(self.registers, src_reg)
+        value = self._read_r8(src_reg)
         self.memory[self.registers.HL] = value
 
-    def _load_to_HL(self, dst_reg: str):
+    def _load_from_HL(self, dst_reg: str):
         print(f"> LD {dst_reg}, (HL)")
-        # self.registers.D = self.memory[self.registers.HL]
         value = self.memory[self.registers.HL]
-        setattr(self.registers, dst_reg, value)
+        self._load_to_r8(dst_reg, value)
 
     def _load_r8_to_r8(self, dst_reg: str, src_reg: str):
         print(f"> LD {dst_reg}, {src_reg}")
-        value = getattr(self.registers, src_reg)
-        setattr(self.registers, dst_reg, value)
+        value = self._read_r8(src_reg)
+        self._load_to_r8(dst_reg, value)
 
     def _handle_no_param_loads(self, opcode: int):
         """
@@ -655,28 +599,28 @@ class CPU:
             operand_value = getattr(self.registers, src_reg)
             operand_repr = src_reg
 
-        if (opcode >> 3) == 0x10:
+        if (opcode >> 3) & 0x7 == 0x0:
             print(f"> ADD {operand_repr}")
             self._add_uint8(operand_value)
-        elif (opcode >> 3) == 0x11:
+        elif (opcode >> 3) & 0x7 == 0x1:
             print(f"> ADC {operand_repr}")
             self._add_with_carry_uint8(operand_value)
-        elif (opcode >> 3) == 0x12:
+        elif (opcode >> 3) & 0x7 == 0x2:
             print(f"> SUB {operand_repr}")
             self._subtract_uint8(operand_value)
-        elif (opcode >> 3) == 0x13:
+        elif (opcode >> 3) & 0x7 == 0x3:
             print(f"> SBC {operand_repr}")
             self._subtract_with_carry_uint8(operand_value)
-        elif (opcode >> 3) == 0x14:
+        elif (opcode >> 3) & 0x7 == 0x4:
             print(f"> AND {operand_repr}")
             self._and_uint8(operand_value)
-        elif (opcode >> 3) == 0x15:
+        elif (opcode >> 3) & 0x7 == 0x5:
             print(f"> XOR {operand_repr}")
             self._xor_uint8(operand_value)
-        elif (opcode >> 3) == 0x16:
+        elif (opcode >> 3) & 0x7 == 0x6:
             print(f"> OR {operand_repr}")
             self._or_uint8(operand_value)
-        elif (opcode >> 3) == 0x17:
+        elif (opcode >> 3) & 0x7 == 0x7:
             print(f"> CP {operand_repr}")
             self._compare_uint8(operand_value)
         else:
@@ -739,6 +683,73 @@ class CPU:
                 self.registers.clear_H()
         else:
             raise ValueError(f"Unexpected opcode {opcode}, expected generic ALU instruction!")
+
+    def _handle_d8_alu(self, opcode: int, extra_bytes: List[int]):
+        """
+        Handles instructions in the special immediate arithmetic/logic groups (0xC6:0xF6:0x10 and 0xCE:0xFE:0x10)
+        :param opcode:
+        :return:
+        """
+        operand_value = extra_bytes[0]
+        operand_repr = "n"
+
+        if (opcode >> 3) & 0x7 == 0x0:
+            print(f"> ADD {operand_repr}")
+            self._add_uint8(operand_value)
+        elif (opcode >> 3) & 0x7 == 0x1:
+            print(f"> ADC {operand_repr}")
+            self._add_with_carry_uint8(operand_value)
+        elif (opcode >> 3) & 0x7 == 0x2:
+            print(f"> SUB {operand_repr}")
+            self._subtract_uint8(operand_value)
+        elif (opcode >> 3) & 0x7 == 0x3:
+            print(f"> SBC {operand_repr}")
+            self._subtract_with_carry_uint8(operand_value)
+        elif (opcode >> 3) & 0x7 == 0x4:
+            print(f"> AND {operand_repr}")
+            self._and_uint8(operand_value)
+        elif (opcode >> 3) & 0x7 == 0x5:
+            print(f"> XOR {operand_repr}")
+            self._xor_uint8(operand_value)
+        elif (opcode >> 3) & 0x7 == 0x6:
+            print(f"> OR {operand_repr}")
+            self._or_uint8(operand_value)
+        elif (opcode >> 3) & 0x7 == 0x7:
+            print(f"> CP {operand_repr}")
+            self._compare_uint8(operand_value)
+        else:
+            raise ValueError(f"Unexpected opcode {opcode}, expected generic ALU instruction!")
+
+    def _handle_d8_loads(self, opcode: int, extra_bytes: List[int]):
+        """
+        Handles instructions in the special immediate single register load group (0x06 : 0x36 : 0x10 and 0x0A : 0x3A : 0x10)
+        :param opcode:
+        :return:
+        """
+        operand_value = extra_bytes[0]
+
+        dst_reg_i = (opcode >> 3) & 0x7
+        dst_reg = SR_map.get(dst_reg_i, None)
+        if dst_reg is None:
+            print(f"> LD (HL), n")
+            self.memory[self.registers.HL] = operand_value
+        else:
+            print(f"> LD {dst_reg}, n")
+            self._load_to_r8(dst_reg, operand_value)
+
+    def _handle_reset_vector(self, opcode: int):
+        """
+        Handles RST instructions
+        :param opcode:
+        :return:
+        """
+        # 0b11xxx111
+        dst_address = (opcode >> 3) * 8
+        print(f"> RST 0x{dst_address:02X}")
+        self.registers.SP -= 2
+        self.memory[self.registers.SP + 1] = (self.registers.PC >> 8) & 0xFF
+        self.memory[self.registers.SP] = self.registers.PC & 0xFF
+        self.registers.write_PC(dst_address)
 
     def __str__(self):
         return f'{self.registers} | IME: {self.IME} | T: {self.clock}'

@@ -46,7 +46,7 @@ def main():
             #     text += txt(f"{bin_str}")
 
             if opcode == 0x76:
-                text += txt(f"{bin_str}")
+                text += txt(f"% m HALT")
             elif (opcode >> 6) & 0x03 == 1:
                 # text += txt(f"% g {bin_str}")
                 bg_color = "g"
@@ -86,6 +86,16 @@ def main():
 
         elif opcode & 0xC6 == 0x04:
             text += txt(f"% y {bin_str}")
+
+        elif opcode & 0xC7 == 0xC6:
+            text += txt(f"% y {bin_str}")
+
+        elif opcode & 0xC7 == 0x06:
+            text += txt(f"% b {bin_str}")
+
+        elif opcode & 0xC7 == 0xC7:
+            text += txt(f"%R   {bin_str}")
+
         else:
             text += txt(f"{bin_str}")
 
