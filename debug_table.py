@@ -49,10 +49,10 @@ def main():
                 text += txt(f"%m  HALT")
             elif (opcode >> 6) & 0x03 == 1:
                 # text += txt(f"% g {bin_str}")
-                bg_color = "g"
+                bg_color = "b"
                 if src_reg is None:
                     src_reg = "(HL)"
-                    bg_color = "r"
+                    bg_color = "b"
                 elif dst_reg is None:
                     dst_reg = "(HL)"
                     bg_color = "b"
@@ -96,10 +96,10 @@ def main():
         elif opcode & 0xC7 == 0xC7:
             text += txt(f"%R   {bin_str}")
 
-        elif opcode & 0xCF == 0xC1: # 11xx0001
+        elif opcode & 0xCF == 0xC1:
             text += txt(f"%g  {bin_str}")
 
-        elif opcode & 0xCF == 0xC5: # 11xx0101
+        elif opcode & 0xCF == 0xC5:
             text += txt(f"%g  {bin_str}")
 
         elif opcode & 0xC7 == 0x03:
@@ -107,6 +107,12 @@ def main():
 
         elif opcode & 0xCF == 0x09:
             text += txt(f"% M {bin_str}")
+
+        elif opcode & 0xCF == 0x01:
+            text += txt(f"%kG {bin_str}")
+
+        elif opcode & 0xC7 == 0x02:
+            text += txt(f"%kb {bin_str}")
 
         else:
             text += txt(f"{bin_str}")

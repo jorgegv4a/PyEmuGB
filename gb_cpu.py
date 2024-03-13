@@ -114,21 +114,17 @@ class CPU:
         elif opcode & 0xCF == 0x09:
             self._handle_add_r16(opcode)
 
-        # ---- LOAD FROM DOUBLE IMMEDIATE TO DOUBLE REGISTER
-        elif opcode == 0x01: # LD BC, d16
-            immediate = (extra_bytes[1] << 8) | extra_bytes[0]
-            print(F"> LD BC, d16")
-            self.registers.BC = immediate
+        elif opcode & 0xCF == 0x01:
+            self._handle_load_d16_to_r16(opcode, extra_bytes)
 
+        elif opcode & 0xC7 == 0x02:
+            pass
+
+        # ---- LOAD FROM DOUBLE IMMEDIATE TO DOUBLE REGISTER
         elif opcode == 0x21: # LD HL, d16
             immediate = (extra_bytes[1] << 8) | extra_bytes[0]
             print(F"> LD HL, 0x{immediate:04X}")
             self.registers.HL = immediate
-
-        elif opcode == 0x31: # LD SP, d16
-            immediate = (extra_bytes[1] << 8) | extra_bytes[0]
-            print(F"> LD SP, d16")
-            self.registers.SP = immediate
 
         # ---- LOAD FROM SINGLE REGISTER TO INDIRECT ADDRESS
         elif opcode == 0x32: # LD (HL-), A
@@ -805,6 +801,66 @@ class CPU:
         else:
             self.registers.clear_C()
         self.registers.clear_N()
+
+    def _handle_load_d16_to_r16(self, opcode: int, extra_bytes: List[int]):
+        """
+        Handles LD instructions for double immediate to double register
+        :param opcode:
+        :return:
+        """
+        immediate = (extra_bytes[1] << 8) | extra_bytes[0]
+        dst_reg_i = (opcode >> 4) & 0x5
+        dst_reg = r16_map[dst_reg_i]
+        operand_repr = dst_reg
+
+        print(F"> LD {operand_repr}, d16")
+        setattr(self.registers, dst_reg, immediate)
+
+    def _load_to_r16_address(self, dst_reg: str):
+        value = self._read_r8('A')
+        dst_address = getattr(self.registers, dst_reg)
+        self.memory[dst_address] = value
+
+    def _load_from_r16_address(self, src_reg: str):
+        src_address = getattr(self.registers, src_reg)
+        value = self.memory[src_address]
+        self._load_to_r8('A', value)
+
+    def _handle_indirect_loads(self, opcode: int):
+        """
+        Handles LD instructions for double immediate to double register
+        :param opcode:
+        :return:
+        """
+        # src_reg_i = opcode & 0x7
+        # src_reg = r8_map.get(src_reg_i, None)
+        #
+        # dst_reg_i = (opcode >> 3) & 0x7
+        # dst_reg = r8_map.get(dst_reg_i, None)
+        # if (opcode >> 6) & 0x03 == 1:
+        #     if src_reg is None:
+        #         self._load_to_HL(dst_reg)
+        #     elif dst_reg is None:
+        #         self._load_from_HL(src_reg)
+        #     else:
+        #         self._load_r8_to_r8(dst_reg, src_reg)
+
+        dst_reg_i = (opcode >> 4) & 0x3
+        dst_reg = r16_map[dst_reg_i]
+
+        if (opcode >> 5) & 1 == 1:
+            dst_reg = "HL"
+
+        if (opcode >> 4) & 1 == 0: # LD (r16), A
+            self._load_to_r16_address(dst_reg)
+        else: # LD A, (r16)
+            self._load_from_r16_address(dst_reg)
+
+        if (opcode >> 6) & 1 == 0:
+            self.registers.HL += 1
+        else:
+            self.registers.HL -= 1
+
 
     def __str__(self):
         return f'{self.registers} | IME: {self.IME} | T: {self.clock}'
