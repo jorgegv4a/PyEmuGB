@@ -142,7 +142,7 @@ class CPU:
             self._handle_load_r16_to_r16(opcode, extra_bytes)
 
         elif opcode & 0xE7 == 0x07:
-            pass
+            self._handle_rotate_accumulator(opcode)
 
         # ---- LOAD FROM DOUBLE IMMEDIATE TO DOUBLE REGISTER
         elif opcode == 0x21: # LD HL, d16
@@ -932,16 +932,56 @@ class CPU:
             print(F"> LD SP, HL")
             self.registers.SP = self.registers.HL
 
-    def _handle_rotate_accumulator(self, opcode: int, extra_bytes: List[int]):
+    def _handle_rotate_accumulator(self, opcode: int):
         """
         Handles rotate accumulator instructions
         :param opcode:
         :return:
         """
-        print(F"> JR e")
-        immediate = byte_to_int8(extra_bytes[0])
-        self.registers.write_PC(self.registers.PC + immediate)
-        return True
+        if (opcode >> 3) & 0x3 == 0x0:
+            print(F"> RLCA")
+            top_bit = (self.registers.A >> 7) & 1
+            self.registers.A = ((self.registers.A & 0x7F) << 1) | top_bit
+            if top_bit:
+                self.registers.set_C()
+            else:
+                self.registers.clear_C()
+            self.registers.clear_Z()
+            self.registers.clear_N()
+            self.registers.clear_H()
+        elif (opcode >> 3) & 0x3 == 0x1:
+            print(F"> RRCA")
+            bottom_bit = self.registers.A & 1
+            self.registers.A = (self.registers.A >> 1) | (bottom_bit << 7)
+            if bottom_bit:
+                self.registers.set_C()
+            else:
+                self.registers.clear_C()
+            self.registers.clear_Z()
+            self.registers.clear_N()
+            self.registers.clear_H()
+        elif (opcode >> 3) & 0x3 == 0x2:
+            print(F"> RLA")
+            top_bit = (self.registers.A >> 7) & 1
+            self.registers.A = ((self.registers.A & 0x7F) << 1) | self.registers.read_C()
+            if top_bit:
+                self.registers.set_C()
+            else:
+                self.registers.clear_C()
+            self.registers.clear_Z()
+            self.registers.clear_N()
+            self.registers.clear_H()
+        elif (opcode >> 3) & 0x3 == 0x3:
+            print(F"> RRA")
+            bottom_bit = self.registers.A & 1
+            self.registers.A = (self.registers.A >> 1) | (self.registers.read_C() << 7)
+            if bottom_bit:
+                self.registers.set_C()
+            else:
+                self.registers.clear_C()
+            self.registers.clear_Z()
+            self.registers.clear_N()
+            self.registers.clear_H()
 
     def __str__(self):
         return f'{self.registers} | IME: {self.IME} | T: {self.clock}'
