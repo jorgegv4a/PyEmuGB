@@ -27,7 +27,7 @@ def byte_to_int8(value: int) -> int:
     return (value & 0x7F) - 128
 
 
-def bytes_to_int16(value: List[int]) -> int:
+def bytes_to_uint16(value: List[int]) -> int:
     # LSB first
     return (value[1] << 8) | value[0]
 
@@ -146,6 +146,9 @@ class CPU:
 
         elif opcode & 0xE7 == 0x27:
             self._handle_accumulator_misc(opcode)
+
+        elif opcode & 0xE5 == 0xE0 and opcode & 0xEF != 0xE8:
+            self._handle_misc_indirect_loads(opcode, extra_bytes)
 
         # ---- LOAD FROM DOUBLE IMMEDIATE TO DOUBLE REGISTER
         elif opcode == 0x21: # LD HL, d16
@@ -800,7 +803,7 @@ class CPU:
         :param opcode:
         :return:
         """
-        immediate = bytes_to_int16(extra_bytes)
+        immediate = bytes_to_uint16(extra_bytes)
         dst_reg_i = (opcode >> 4) & 0x5
         dst_reg = r16_map[dst_reg_i]
         operand_repr = dst_reg
@@ -885,7 +888,7 @@ class CPU:
         :param opcode:
         :return:
         """
-        immediate = bytes_to_int16(extra_bytes)
+        immediate = bytes_to_uint16(extra_bytes)
         print(F"> LD (d16), SP")
         self.memory[immediate] = self.registers.SP & 0xFF
         self.memory[immediate + 1] = (self.registers.SP >> 8) & 0xFF
@@ -1033,6 +1036,30 @@ class CPU:
             self._set_carry_flag()
         elif (opcode >> 3) & 0 == 3:
             self._complement_carry_flag()
+
+    def _handle_misc_indirect_loads(self, opcode: int, extra_bytes: List[int]):
+        """
+        Handles indirect high loads and d16 loads
+        :param opcode:
+        :return:
+        """
+        if (opcode >> 2) & 1 == 1:
+            if (opcode >> 3) & 1 == 0:
+                address = 0xFF00 | self.registers.C
+            else:
+                address = bytes_to_uint16(extra_bytes)
+
+            if (opcode >> 4) & 0x1 == 0:
+                self.memory[address] = self.registers.A
+            elif (opcode >> 4) & 0x1 == 2:
+                self.registers.A = self.memory[address]
+        else:
+            address = 0xFF00 | extra_bytes[0]
+            if (opcode >> 5) & 1 == 0:
+                self.memory[address] = self.registers.A
+            else:
+                self.registers.A = self.memory[address]
+
 
     def __str__(self):
         return f'{self.registers} | IME: {self.IME} | T: {self.clock}'
