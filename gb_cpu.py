@@ -23,6 +23,15 @@ r16_map = {
 }
 
 
+def byte_to_int8(value: int) -> int:
+    return (value & 0x7F) - 128
+
+
+def bytes_to_int16(value: List[int]) -> int:
+    # LSB first
+    return (value[1] << 8) | value[0]
+
+
 class CPU:
     def __init__(self, game_rom: bytes):
         self.registers = RegisterBank()
@@ -118,6 +127,21 @@ class CPU:
             self._handle_load_d16_to_r16(opcode, extra_bytes)
 
         elif opcode & 0xC7 == 0x02:
+            self._handle_indirect_loads(opcode)
+
+        elif opcode & 0xE7 == 0x20:
+            branch = self._handle_jump_relative_cond(opcode, extra_bytes)
+            if not branch:
+                remaining_cycles = opcode_dict["cycles"][1] - (self.clock - start_clock_t)
+
+        # ---- RELATIVE JUMP
+        elif opcode == 0x18:  # JR e
+            self._handle_jump_relative(opcode, extra_bytes)
+
+        elif opcode & 0xFE == 0xF8:
+            self._handle_load_r16_to_r16(opcode, extra_bytes)
+
+        elif opcode & 0xE7 == 0x07:
             pass
 
         # ---- LOAD FROM DOUBLE IMMEDIATE TO DOUBLE REGISTER
@@ -140,10 +164,7 @@ class CPU:
 
         # ---- LOAD FROM DOUBLE REGISTER TO DOUBLE IMMEDIATE INDIRECT ADDRESS
         elif opcode == 0x08: # LD (a16), SP
-            immediate = (extra_bytes[1] << 8) | extra_bytes[0]
-            print(F"> LD (a16), SP")
-            self.memory[immediate] = self.registers.SP & 0xFF
-            self.memory[immediate + 1] = (self.registers.SP >> 8) & 0xFF
+            self._handle_load_d16_to_SP(opcode, extra_bytes)
 
         # ---- LOAD FROM SINGLE REGISTER TO REGISTER INDIRECT ADDRESS
         elif opcode == 0xE2: # LD (C), A
@@ -253,31 +274,6 @@ class CPU:
         elif opcode == 0xE9:  # JP (HL)
             print(F"> JP (HL)")
             self.registers.write_PC(self.memory[self.registers.HL])
-
-        # ---- RELATIVE JUMP
-        elif opcode == 0x18:  # JR e
-            print(F"> JR e")
-            # signed int
-            immediate = (extra_bytes[0] & 0x7F) - 128
-            self.registers.write_PC(self.registers.PC + immediate)
-
-        elif opcode == 0x20:  # JR NZ, r8
-            print(F"> JR NZ, r8")
-            # signed int
-            immediate = (extra_bytes[0] & 0x7F) - 128
-            if not self.registers.read_Z():
-                self.registers.write_PC(self.registers.PC + immediate)
-            else:
-                remaining_cycles = opcode_dict["cycles"][1] - (self.clock - start_clock_t)
-
-        elif opcode == 0x28:  # JR Z, r8
-            print(F"> JR Z, r8")
-            # signed int
-            immediate = (extra_bytes[0] & 0x7F) - 128
-            if self.registers.read_Z():
-                self.registers.write_PC(self.registers.PC + immediate)
-            else:
-                remaining_cycles = opcode_dict["cycles"][1] - (self.clock - start_clock_t)
 
         # ---- CALL DOUBLE INMMEDIATE
         elif opcode == 0xCD:  # CALL a16
@@ -808,7 +804,7 @@ class CPU:
         :param opcode:
         :return:
         """
-        immediate = (extra_bytes[1] << 8) | extra_bytes[0]
+        immediate = bytes_to_int16(extra_bytes)
         dst_reg_i = (opcode >> 4) & 0x5
         dst_reg = r16_map[dst_reg_i]
         operand_repr = dst_reg
@@ -832,19 +828,6 @@ class CPU:
         :param opcode:
         :return:
         """
-        # src_reg_i = opcode & 0x7
-        # src_reg = r8_map.get(src_reg_i, None)
-        #
-        # dst_reg_i = (opcode >> 3) & 0x7
-        # dst_reg = r8_map.get(dst_reg_i, None)
-        # if (opcode >> 6) & 0x03 == 1:
-        #     if src_reg is None:
-        #         self._load_to_HL(dst_reg)
-        #     elif dst_reg is None:
-        #         self._load_from_HL(src_reg)
-        #     else:
-        #         self._load_r8_to_r8(dst_reg, src_reg)
-
         dst_reg_i = (opcode >> 4) & 0x3
         dst_reg = r16_map[dst_reg_i]
 
@@ -861,6 +844,102 @@ class CPU:
         else:
             self.registers.HL -= 1
 
+    def _handle_jump_relative_cond(self, opcode: int, extra_bytes: List[int]) -> bool:
+        """
+        Handles JR conditional instructions
+        :param opcode:
+        :return: True if condition is met (branch execution), False otherwise
+        """
+        if (opcode >> 3) & 0x3 == 0x0:
+            condition = not self.registers.read_Z()
+            cond_repr = "NZ"
+        elif (opcode >> 3) & 0x3 == 0x1:
+            condition = self.registers.read_Z()
+            cond_repr = "Z"
+        elif (opcode >> 3) & 0x3 == 0x2:
+            condition = not self.registers.read_C()
+            cond_repr = "NC"
+        else:
+            condition = self.registers.read_C()
+            cond_repr = "C"
+
+        print(F"> JR {cond_repr}, e")
+
+        if not condition:
+            return False
+
+        immediate = byte_to_int8(extra_bytes[0])
+        self.registers.write_PC(self.registers.PC + immediate)
+        return True
+
+    def _handle_jump_relative(self, opcode: int, extra_bytes: List[int]):
+        """
+        Handles JR instructions
+        :param opcode:
+        :return: True if condition is met (branch execution), False otherwise
+        """
+        print(F"> JR e")
+        immediate = byte_to_int8(extra_bytes[0])
+        self.registers.write_PC(self.registers.PC + immediate)
+        return True
+
+    def _handle_load_d16_to_SP(self, opcode: int, extra_bytes: List[int]):
+        """
+        Handles 'LD (nn), SP'
+        :param opcode:
+        :return:
+        """
+        immediate = bytes_to_int16(extra_bytes)
+        print(F"> LD (d16), SP")
+        self.memory[immediate] = self.registers.SP & 0xFF
+        self.memory[immediate + 1] = (self.registers.SP >> 8) & 0xFF
+
+    def _handle_load_r16_to_r16(self, opcode: int, extra_bytes: List[int]):
+        """
+        Handles 'LD HL, SP+e' and 'LD SP, HL'
+        :param opcode:
+        :return:
+        """
+        if opcode & 1 == 0: # LD HL, SP+
+            immediate = byte_to_int8(extra_bytes[0])
+
+            value_pre = self.registers.HL
+            # 16 bit addition uses the 8 bit ALU, LSB first then MSB, so the resulting flags apply to the high byte
+            upper_nibble_pre = (self.registers.SP >> 4) & 0xF
+            result = self.registers.SP + immediate
+            upper_nibble_post = (result >> 4) & 0xF
+
+            self.registers.HL = result
+            if upper_nibble_pre != upper_nibble_post:
+                self.registers.set_H()
+            else:
+                self.registers.clear_H()
+            if immediate > 0:
+                if value_pre > (self.registers.SP & 0xFF):
+                    self.registers.set_C()
+                else:
+                    self.registers.clear_C()
+            else:
+                if value_pre < (self.registers.SP & 0xFF):
+                    self.registers.set_C()
+                else:
+                    self.registers.clear_C()
+
+            self.registers.clear_Z()
+            self.registers.clear_N()
+        else:
+            self.registers.SP = self.registers.HL
+
+    def _handle_rotate_accumulator(self, opcode: int, extra_bytes: List[int]):
+        """
+        Handles rotate accumulator instructions
+        :param opcode:
+        :return: True if condition is met (branch execution), False otherwise
+        """
+        print(F"> JR e")
+        immediate = byte_to_int8(extra_bytes[0])
+        self.registers.write_PC(self.registers.PC + immediate)
+        return True
 
     def __str__(self):
         return f'{self.registers} | IME: {self.IME} | T: {self.clock}'
