@@ -138,6 +138,9 @@ def main():
         elif opcode & 0xE7 == 0x07:
             text += txt(f"%Kg {bin_str}")
 
+        elif opcode & 0xE7 == 0x27:
+            text += txt(f"% Y {bin_str}")
+
         else:
             text += txt(f"{bin_str}")
 

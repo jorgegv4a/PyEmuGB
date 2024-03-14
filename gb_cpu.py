@@ -144,6 +144,9 @@ class CPU:
         elif opcode & 0xE7 == 0x07:
             self._handle_rotate_accumulator(opcode)
 
+        elif opcode & 0xE7 == 0x27:
+            self._handle_accumulator_misc(opcode)
+
         # ---- LOAD FROM DOUBLE IMMEDIATE TO DOUBLE REGISTER
         elif opcode == 0x21: # LD HL, d16
             immediate = (extra_bytes[1] << 8) | extra_bytes[0]
@@ -205,13 +208,6 @@ class CPU:
             self.registers.A = self.memory[immediate]
 
         # -- ARITHMETIC AND LOGIC
-        # ---- COMPLEMENT A
-        elif opcode == 0x2F: # CPL
-            print(f"> CPL")
-            self.registers.A ^= 0xFF
-            self.registers.set_H()
-            self.registers.set_N()
-
         # -- ROTATES AND SHIFTS
         # ---- SWAP SINGLE REGISTER
         elif opcode == 0xCB37:  # SWAP A
@@ -982,6 +978,61 @@ class CPU:
             self.registers.clear_Z()
             self.registers.clear_N()
             self.registers.clear_H()
+
+    def _decimal_adjust_acc(self):
+        if self.registers.read_N():
+            if self.registers.read_C():
+                self.registers.A -= 0x60
+            if self.registers.read_H():
+                self.registers.A -= 0x06
+        else:
+            if self.registers.read_C() or self.registers.A > 0x99:
+                self.registers.A += 0x60
+                self.registers.set_C()
+            if self.registers.read_H() or (self.registers.A & 0x0F) > 0x99:
+                self.registers.A += 0x06
+            if self.registers.read_H():
+                self.registers.A -= 0x06
+        if self.registers.A == 0:
+            self.registers.set_Z()
+        else:
+            self.registers.clear_Z()
+        self.registers.clear_H()
+
+    def _complement_acc(self):
+        self.registers.A ^= 0xFF
+        self.registers.set_H()
+        self.registers.set_N()
+
+    def _set_carry_flag(self):
+        self.registers.set_C()
+        self.registers.clear_H()
+        self.registers.clear_N()
+
+    def _complement_carry_flag(self):
+        if self.registers.read_C():
+            self.registers.clear_C()
+        else:
+            self.registers.set_C()
+        self.registers.clear_H()
+        self.registers.clear_N()
+
+    def _handle_accumulator_misc(self, opcode: int):
+        """
+        Handles misc accumulator instructions (DAA, CPL, SCF, CCF)
+        :param opcode:
+        :return:
+        """
+        if (opcode >> 3) & 0 == 0:
+            print(f"> DAA")
+            self._decimal_adjust_acc()
+        elif (opcode >> 3) & 0 == 1:
+            print(f"> CPL")
+            self._complement_acc()
+        elif (opcode >> 3) & 0 == 2:
+            self._set_carry_flag()
+        elif (opcode >> 3) & 0 == 3:
+            self._complement_carry_flag()
 
     def __str__(self):
         return f'{self.registers} | IME: {self.IME} | T: {self.clock}'
