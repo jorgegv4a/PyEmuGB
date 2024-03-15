@@ -166,6 +166,18 @@ class CPU:
         elif opcode == 0xE9:
             self._handle_jump_absolute_HL(opcode, extra_bytes)
 
+        elif opcode & 0xE7 == 0xC4:
+            self._handle_call_cond(opcode, extra_bytes)
+
+        elif opcode == 0xCD:
+            self._handle_call_d16(opcode, extra_bytes)
+
+        elif opcode & 0xEF == 0xC9:
+            self._handle_return(opcode)
+
+        elif opcode == 0xE8:
+            self._handle_add_SP_int8(opcode, extra_bytes)
+
         # ---- LOAD FROM DOUBLE IMMEDIATE TO DOUBLE REGISTER
         elif opcode == 0x21: # LD HL, d16
             immediate = (extra_bytes[1] << 8) | extra_bytes[0]
@@ -1134,7 +1146,6 @@ class CPU:
         print(F"> JP nn")
         address = bytes_to_uint16(extra_bytes)
         self.registers.write_PC(address)
-        return True
 
     def _handle_jump_absolute_HL(self, opcode: int, extra_bytes: List[int]):
         """
@@ -1145,8 +1156,94 @@ class CPU:
         print(F"> JP HL")
         address = self.registers.HL
         self.registers.write_PC(address)
+
+    def _handle_call_cond(self, opcode: int, extra_bytes: List[int]) -> bool:
+        """
+        Handles conditional CALL instructions
+        :param opcode:
+        :return: True if condition is met (branch execution), False otherwise
+        """
+        if (opcode >> 3) & 0x3 == 0x0:
+            condition = not self.registers.read_Z()
+            cond_repr = "NZ"
+        elif (opcode >> 3) & 0x3 == 0x1:
+            condition = self.registers.read_Z()
+            cond_repr = "Z"
+        elif (opcode >> 3) & 0x3 == 0x2:
+            condition = not self.registers.read_C()
+            cond_repr = "NC"
+        else:
+            condition = self.registers.read_C()
+            cond_repr = "C"
+
+        print(F"> CALL {cond_repr}, nn")
+
+        if not condition:
+            return False
+
+        address = bytes_to_uint16(extra_bytes)
+        self._push_stack(self.registers.PC)
+        self.registers.write_PC(address)
         return True
 
+    def _handle_call_d16(self, opcode: int, extra_bytes: List[int]):
+        """
+        Handles conditional CALL nn
+        :param opcode:
+        :return:
+        """
+        print("> CALL nn")
+        address = bytes_to_uint16(extra_bytes)
+        self._push_stack(self.registers.PC)
+        self.registers.write_PC(address)
+
+    def _handle_return(self, opcode: int):
+        """
+        Handles RET
+        :param opcode:
+        :return:
+        """
+        address = self._pop_stack()
+        self.registers.write_PC(address)
+        if (opcode >> 4) & 1 == 1:
+            print("> RETI")
+            self.IME = 1
+        else:
+            print("> RET")
+
+    def _handle_add_SP_int8(self, opcode: int, extra_bytes: List[int]):
+        """
+        Handles 'LD HL, SP+e' and 'LD SP, HL'
+        :param opcode:
+        :return:
+        """
+        print(F"> ADD SP, e")
+        immediate = byte_to_int8(extra_bytes[0])
+
+        value_pre = self.registers.SP
+        # 16 bit addition uses the 8 bit ALU, LSB first then MSB, so the resulting flags apply to the high byte
+        upper_nibble_pre = (self.registers.SP >> 4) & 0xF
+        result = self.registers.SP + immediate
+        upper_nibble_post = (result >> 4) & 0xF
+
+        self.registers.SP = result
+        if upper_nibble_pre != upper_nibble_post:
+            self.registers.set_H()
+        else:
+            self.registers.clear_H()
+        if immediate > 0:
+            if value_pre > (self.registers.SP & 0xFF):
+                self.registers.set_C()
+            else:
+                self.registers.clear_C()
+        else:
+            if value_pre < (self.registers.SP & 0xFF):
+                self.registers.set_C()
+            else:
+                self.registers.clear_C()
+
+        self.registers.clear_Z()
+        self.registers.clear_N()
 
     def __str__(self):
         return f'{self.registers} | IME: {self.IME} | T: {self.clock}'

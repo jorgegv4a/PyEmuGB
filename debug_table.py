@@ -25,7 +25,7 @@ def main():
     for opcode in range(0x00, 0x100):
         bin_str = f"{opcode:02X}"
         # bin_str = f"{opcode:08b}"
-        if opcode in (0xD3, 0xE3, 0x34, 0xF4, 0xDB, 0xEB, 0xEC, 0xFC, 0xDD, 0xED, 0xFD):
+        if opcode in (0xD3, 0xE3, 0xE4, 0xF4, 0xDB, 0xEB, 0xEC, 0xFC, 0xDD, 0xED, 0xFD):
             text += txt(f"%KkF ----")
 
         elif 0x40 <= opcode < 0x80:
@@ -158,6 +158,21 @@ def main():
 
         elif opcode == 0xE9:
             text += txt(f"%Yw {bin_str}")
+
+        elif opcode & 0xE7 == 0xC4:
+            text += txt(f"%kR {bin_str}")
+
+        elif opcode == 0xCD:
+            text += txt(f"%kR {bin_str}")
+
+        elif opcode & 0xEF == 0xC9:
+            text += txt(f"%kR {bin_str}")
+
+        elif opcode == 0xCB:
+            text += txt(f"%kBs{bin_str}")
+
+        elif opcode == 0xE8:
+            text += txt(f"% M {bin_str}")
 
         else:
             text += txt(f"{bin_str}")
