@@ -155,6 +155,11 @@ class CPU:
             if not branch:
                 remaining_cycles = opcode_dict["cycles"][1] - (self.clock - start_clock_t)
 
+        elif opcode & 0xE7 == 0xC2:
+            branch = self._handle_jump_d16_cond(opcode, extra_bytes)
+            if not branch:
+                remaining_cycles = opcode_dict["cycles"][1] - (self.clock - start_clock_t)
+
         # ---- LOAD FROM DOUBLE IMMEDIATE TO DOUBLE REGISTER
         elif opcode == 0x21: # LD HL, d16
             immediate = (extra_bytes[1] << 8) | extra_bytes[0]
@@ -1083,6 +1088,34 @@ class CPU:
             return False
 
         address = self._pop_stack()
+        self.registers.write_PC(address)
+        return True
+
+    def _handle_jump_d16_cond(self, opcode: int, extra_bytes: List[int]) -> bool:
+        """
+        Handles JP conditional instructions
+        :param opcode:
+        :return: True if condition is met (branch execution), False otherwise
+        """
+        if (opcode >> 3) & 0x3 == 0x0:
+            condition = not self.registers.read_Z()
+            cond_repr = "NZ"
+        elif (opcode >> 3) & 0x3 == 0x1:
+            condition = self.registers.read_Z()
+            cond_repr = "Z"
+        elif (opcode >> 3) & 0x3 == 0x2:
+            condition = not self.registers.read_C()
+            cond_repr = "NC"
+        else:
+            condition = self.registers.read_C()
+            cond_repr = "C"
+
+        print(F"> JP {cond_repr}, nn")
+
+        if not condition:
+            return False
+
+        address = bytes_to_uint16(extra_bytes)
         self.registers.write_PC(address)
         return True
 
