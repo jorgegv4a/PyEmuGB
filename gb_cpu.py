@@ -150,6 +150,11 @@ class CPU:
         elif opcode & 0xE5 == 0xE0 and opcode & 0xEF != 0xE8:
             self._handle_misc_indirect_loads(opcode, extra_bytes)
 
+        elif opcode & 0xE7 == 0xC0:
+            branch = self._handle_return_cond(opcode)
+            if not branch:
+                remaining_cycles = opcode_dict["cycles"][1] - (self.clock - start_clock_t)
+
         # ---- LOAD FROM DOUBLE IMMEDIATE TO DOUBLE REGISTER
         elif opcode == 0x21: # LD HL, d16
             immediate = (extra_bytes[1] << 8) | extra_bytes[0]
@@ -282,13 +287,6 @@ class CPU:
             self.memory[self.registers.SP + 1] = (self.registers.PC >> 8) & 0xFF
             self.memory[self.registers.SP] = self.registers.PC & 0xFF
             self.registers.write_PC(immediate)
-
-        # ---- RETURN
-        elif opcode == 0xC9:  # RET
-            print(f"> RET")
-            address = self.memory[self.registers.SP] | (self.memory[self.registers.SP + 1] << 8)
-            self.registers.SP += 2
-            self.registers.write_PC(address)
 
         # -- INTERRUPT CONTROL
         # ---- DISABLE INTERRUPTS
@@ -1043,22 +1041,50 @@ class CPU:
         :param opcode:
         :return:
         """
-        if (opcode >> 2) & 1 == 1:
+        if (opcode >> 1) & 1 == 1:
             if (opcode >> 3) & 1 == 0:
                 address = 0xFF00 | self.registers.C
             else:
                 address = bytes_to_uint16(extra_bytes)
 
-            if (opcode >> 4) & 0x1 == 0:
+            if (opcode >> 3) & 0x1 == 0:
                 self.memory[address] = self.registers.A
-            elif (opcode >> 4) & 0x1 == 2:
+            elif (opcode >> 3) & 0x1 == 2:
                 self.registers.A = self.memory[address]
         else:
             address = 0xFF00 | extra_bytes[0]
-            if (opcode >> 5) & 1 == 0:
+            if (opcode >> 4) & 1 == 0:
                 self.memory[address] = self.registers.A
             else:
                 self.registers.A = self.memory[address]
+
+    def _handle_return_cond(self, opcode: int) -> bool:
+        """
+        Handles conditional RET instructions
+        :param opcode:
+        :return:
+        """
+        if (opcode >> 3) & 0x3 == 0x0:
+            condition = not self.registers.read_Z()
+            cond_repr = "NZ"
+        elif (opcode >> 3) & 0x3 == 0x1:
+            condition = self.registers.read_Z()
+            cond_repr = "Z"
+        elif (opcode >> 3) & 0x3 == 0x2:
+            condition = not self.registers.read_C()
+            cond_repr = "NC"
+        else:
+            condition = self.registers.read_C()
+            cond_repr = "C"
+
+        print(F"> RET {cond_repr}")
+
+        if not condition:
+            return False
+
+        address = self._pop_stack()
+        self.registers.write_PC(address)
+        return True
 
 
     def __str__(self):

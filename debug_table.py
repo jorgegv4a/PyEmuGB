@@ -147,6 +147,9 @@ def main():
         elif opcode & 0xE5 == 0xE0 and opcode & 0xEF != 0xE8:
             text += txt(f"% b {bin_str}")
 
+        elif opcode & 0xE7 == 0xC0:
+            text += txt(f"%Yw {bin_str}")
+
         else:
             text += txt(f"{bin_str}")
 
