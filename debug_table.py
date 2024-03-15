@@ -153,6 +153,12 @@ def main():
         elif opcode & 0xE7 == 0xC2:
             text += txt(f"%Yw {bin_str}")
 
+        elif opcode == 0xC3:
+            text += txt(f"%Yw {bin_str}")
+
+        elif opcode == 0xE9:
+            text += txt(f"%Yw {bin_str}")
+
         else:
             text += txt(f"{bin_str}")
 

@@ -160,6 +160,12 @@ class CPU:
             if not branch:
                 remaining_cycles = opcode_dict["cycles"][1] - (self.clock - start_clock_t)
 
+        elif opcode == 0xC3:
+            self._handle_jump_absolute_d16(opcode, extra_bytes)
+
+        elif opcode == 0xE9:
+            self._handle_jump_absolute_HL(opcode, extra_bytes)
+
         # ---- LOAD FROM DOUBLE IMMEDIATE TO DOUBLE REGISTER
         elif opcode == 0x21: # LD HL, d16
             immediate = (extra_bytes[1] << 8) | extra_bytes[0]
@@ -876,7 +882,7 @@ class CPU:
 
     def _handle_jump_relative(self, opcode: int, extra_bytes: List[int]):
         """
-        Handles JR instructions
+        Handles JR, e instruction
         :param opcode:
         :return: True if condition is met (branch execution), False otherwise
         """
@@ -1116,6 +1122,28 @@ class CPU:
             return False
 
         address = bytes_to_uint16(extra_bytes)
+        self.registers.write_PC(address)
+        return True
+
+    def _handle_jump_absolute_d16(self, opcode: int, extra_bytes: List[int]):
+        """
+        Handles JP nn
+        :param opcode:
+        :return: True if condition is met (branch execution), False otherwise
+        """
+        print(F"> JP nn")
+        address = bytes_to_uint16(extra_bytes)
+        self.registers.write_PC(address)
+        return True
+
+    def _handle_jump_absolute_HL(self, opcode: int, extra_bytes: List[int]):
+        """
+        Handles JP HL
+        :param opcode:
+        :return: True if condition is met (branch execution), False otherwise
+        """
+        print(F"> JP HL")
+        address = self.registers.HL
         self.registers.write_PC(address)
         return True
 
