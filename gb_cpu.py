@@ -999,17 +999,21 @@ class CPU:
         :param opcode:
         :return:
         """
-        if (opcode >> 3) & 0 == 0:
+        if (opcode >> 3) & 0x3 == 0:
             if DEBUG:
                 print(f"> DAA")
             self._decimal_adjust_acc()
-        elif (opcode >> 3) & 0 == 1:
+        elif (opcode >> 3) & 0x3 == 1:
             if DEBUG:
                 print(f"> CPL")
             self._complement_acc()
-        elif (opcode >> 3) & 0 == 2:
+        elif (opcode >> 3) & 0x3 == 2:
+            if DEBUG:
+                print(f"> SCF")
             self._set_carry_flag()
-        elif (opcode >> 3) & 0 == 3:
+        elif (opcode >> 3) & 0x3 == 3:
+            if DEBUG:
+                print(f"> CCF")
             self._complement_carry_flag()
 
     def _handle_misc_indirect_loads(self, opcode: int, extra_bytes: List[int]):
