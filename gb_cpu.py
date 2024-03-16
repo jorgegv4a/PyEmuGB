@@ -92,120 +92,125 @@ class CPU:
         # how many cycles we haven't ticked over yet
         remaining_cycles = opcode_dict["cycles"][0] - (self.clock - start_clock_t)
 
-        if opcode == 0x00: # NOP
-            if DEBUG:
-                print("> NOP")
-            pass
-        elif opcode == 0x10: # STOP
-            if DEBUG:
-                print("> STOP")
-            pass
-            # TODO: stop clock, disable LCD, wait until joypad interrupt
+        if opcode < 0xFF: # unprefixed
+            if opcode == 0x00: # NOP
+                if DEBUG:
+                    print("> NOP")
+                pass
+            elif opcode == 0x10: # STOP
+                if DEBUG:
+                    print("> STOP")
+                pass
+                # TODO: stop clock, disable LCD, wait until joypad interrupt
 
-        # LOADS
-        elif (0x40 <= opcode < 0x80) and opcode != 0x76:
-            self._handle_no_param_loads(opcode)
+            # LOADS
+            elif (0x40 <= opcode < 0x80) and opcode != 0x76:
+                self._handle_no_param_loads(opcode)
 
-        elif opcode & 0xC7 == 0x06:
-            self._handle_d8_loads(opcode, extra_bytes)
+            elif opcode & 0xC7 == 0x06:
+                self._handle_d8_loads(opcode, extra_bytes)
 
-        elif opcode & 0xCF == 0x01:
-            self._handle_load_d16_to_r16(opcode, extra_bytes)
+            elif opcode & 0xCF == 0x01:
+                self._handle_load_d16_to_r16(opcode, extra_bytes)
 
-        elif opcode & 0xC7 == 0x02:
-            self._handle_indirect_loads(opcode)
+            elif opcode & 0xC7 == 0x02:
+                self._handle_indirect_loads(opcode)
 
-        elif opcode & 0xFE == 0xF8:
-            self._handle_load_r16_to_r16(opcode, extra_bytes)
+            elif opcode & 0xFE == 0xF8:
+                self._handle_load_r16_to_r16(opcode, extra_bytes)
 
-        elif opcode & 0xE5 == 0xE0 and opcode & 0xEF != 0xE8:
-            self._handle_misc_indirect_loads(opcode, extra_bytes)
-        # -----------------
+            elif opcode & 0xE5 == 0xE0 and opcode & 0xEF != 0xE8:
+                self._handle_misc_indirect_loads(opcode, extra_bytes)
+            # -----------------
 
-        # JUMPS
-        elif opcode & 0xE7 == 0xC2:
-            branch = self._handle_jump_d16_cond(opcode, extra_bytes)
-            if not branch:
-                remaining_cycles = opcode_dict["cycles"][1] - (self.clock - start_clock_t)
+            # JUMPS
+            elif opcode & 0xE7 == 0xC2:
+                branch = self._handle_jump_d16_cond(opcode, extra_bytes)
+                if not branch:
+                    remaining_cycles = opcode_dict["cycles"][1] - (self.clock - start_clock_t)
 
-        elif opcode == 0xC3:
-            self._handle_jump_absolute_d16(opcode, extra_bytes)
+            elif opcode == 0xC3:
+                self._handle_jump_absolute_d16(opcode, extra_bytes)
 
-        elif opcode == 0xE9:
-            self._handle_jump_absolute_HL(opcode, extra_bytes)
+            elif opcode == 0xE9:
+                self._handle_jump_absolute_HL(opcode, extra_bytes)
 
-        elif opcode & 0xE7 == 0x20:
-            branch = self._handle_jump_relative_cond(opcode, extra_bytes)
-            if not branch:
-                remaining_cycles = opcode_dict["cycles"][1] - (self.clock - start_clock_t)
+            elif opcode & 0xE7 == 0x20:
+                branch = self._handle_jump_relative_cond(opcode, extra_bytes)
+                if not branch:
+                    remaining_cycles = opcode_dict["cycles"][1] - (self.clock - start_clock_t)
 
-        elif opcode == 0x18:
-            self._handle_jump_relative(opcode, extra_bytes)
-        # -----------------
+            elif opcode == 0x18:
+                self._handle_jump_relative(opcode, extra_bytes)
+            # -----------------
 
-        # ARITHMETIC/LOGIC
-        elif 0x80 <= opcode < 0xC0:
-            self._handle_no_param_alu(opcode)
+            # ARITHMETIC/LOGIC
+            elif 0x80 <= opcode < 0xC0:
+                self._handle_no_param_alu(opcode)
 
-        elif opcode & 0xC7 == 0xC6:
-            self._handle_d8_alu(opcode, extra_bytes)
+            elif opcode & 0xC7 == 0xC6:
+                self._handle_d8_alu(opcode, extra_bytes)
 
-        elif opcode & 0xE7 == 0x27:
-            self._handle_accumulator_misc(opcode)
+            elif opcode & 0xE7 == 0x27:
+                self._handle_accumulator_misc(opcode)
 
-        elif opcode & 0xC6 == 0x04:
-            self._handle_inc_dec_r8(opcode)
+            elif opcode & 0xC6 == 0x04:
+                self._handle_inc_dec_r8(opcode)
 
-        elif opcode & 0xC7 == 0x03:
-            self._handle_inc_dec_r16(opcode)
+            elif opcode & 0xC7 == 0x03:
+                self._handle_inc_dec_r16(opcode)
 
-        elif opcode & 0xCF == 0x09:
-            self._handle_add_r16(opcode)
+            elif opcode & 0xCF == 0x09:
+                self._handle_add_r16(opcode)
 
-        elif opcode == 0xE8:
-            self._handle_add_SP_int8(opcode, extra_bytes)
+            elif opcode == 0xE8:
+                self._handle_add_SP_int8(opcode, extra_bytes)
 
-        elif opcode & 0xCF == 0xC1:
-            self._handle_r16_pop(opcode)
+            elif opcode & 0xCF == 0xC1:
+                self._handle_r16_pop(opcode)
 
-        elif opcode & 0xCF == 0xC5:
-            self._handle_r16_push(opcode)
+            elif opcode & 0xCF == 0xC5:
+                self._handle_r16_push(opcode)
 
-        elif opcode & 0xE7 == 0x07:
-            self._handle_rotate_accumulator(opcode)
-        # -----------------
+            elif opcode & 0xE7 == 0x07:
+                self._handle_rotate_accumulator(opcode)
+            # -----------------
 
-        # CALL/RESET/RETURN
-        elif opcode & 0xE7 == 0xC4:
-            self._handle_call_cond(opcode, extra_bytes)
+            # CALL/RESET/RETURN
+            elif opcode & 0xE7 == 0xC4:
+                self._handle_call_cond(opcode, extra_bytes)
 
-        elif opcode == 0xCD:
-            self._handle_call_d16(opcode, extra_bytes)
+            elif opcode == 0xCD:
+                self._handle_call_d16(opcode, extra_bytes)
 
-        elif opcode & 0xC7 == 0xC7:
-            self._handle_reset_vector(opcode)
+            elif opcode & 0xC7 == 0xC7:
+                self._handle_reset_vector(opcode)
 
-        elif opcode & 0xEF == 0xC9:
-            self._handle_return(opcode)
+            elif opcode & 0xEF == 0xC9:
+                self._handle_return(opcode)
 
-        elif opcode & 0xE7 == 0xC0:
-            branch = self._handle_return_cond(opcode)
-            if not branch:
-                remaining_cycles = opcode_dict["cycles"][1] - (self.clock - start_clock_t)
-        # -----------------
+            elif opcode & 0xE7 == 0xC0:
+                branch = self._handle_return_cond(opcode)
+                if not branch:
+                    remaining_cycles = opcode_dict["cycles"][1] - (self.clock - start_clock_t)
+            # -----------------
 
-        # -- INTERRUPT CONTROL
-        elif opcode == 0xF3: # DI
-            if DEBUG:
-                print(F"> DI")
-            self.IME = 0
+            # -- INTERRUPT CONTROL
+            elif opcode == 0xF3: # DI
+                if DEBUG:
+                    print(F"> DI")
+                self.IME = 0
 
-        elif opcode == 0xFB: # EI
-            if DEBUG:
-                print(f"> EI")
-            self.IME = 1 # TODO: should be done after the next cycle, not immediately
-        # -----------------
+            elif opcode == 0xFB: # EI
+                if DEBUG:
+                    print(f"> EI")
+                self.IME = 1 # TODO: should be done after the next cycle, not immediately
+            # -----------------
+            else:
+                raise NotImplementedError(F"Unprefixed opcode not implemented: 0x{opcode:02X} ({opcode_dict['mnemonic']})")
 
+        elif (opcode >> 8) == 0xCB:  # prefixed
+            raise NotImplementedError(F"Prefixed opcode not implemented: 0x{opcode:02X} ({opcode_dict['mnemonic']})")
         else:
             raise NotImplementedError(F"Opcode not implemented: 0x{opcode:02X} ({opcode_dict['mnemonic']})")
 
@@ -320,10 +325,8 @@ class CPU:
 
     def _add_uint8(self, operand_byte: int):
         value_pre = self.registers.A
-        upper_nibble_pre = (self.registers.A >> 4) & 0xF
         self.registers.A += operand_byte
-        upper_nibble_post = (self.registers.A >> 4) & 0xF
-        if upper_nibble_pre != upper_nibble_post:
+        if (value_pre & 0xF) + (operand_byte & 0xF) > 0xF:
             self.registers.set_H()
         else:
             self.registers.clear_H()
@@ -331,7 +334,7 @@ class CPU:
             self.registers.set_Z()
         else:
             self.registers.clear_Z()
-        if value_pre > self.registers.A:
+        if (value_pre + operand_byte) > 0xFF:
             self.registers.set_C()
         else:
             self.registers.clear_C()
@@ -339,10 +342,8 @@ class CPU:
 
     def _add_with_carry_uint8(self, operand_byte: int):
         value_pre = self.registers.A
-        upper_nibble_pre = (self.registers.A >> 4) & 0xF
         self.registers.A += operand_byte + self.registers.read_C()
-        upper_nibble_post = (self.registers.A >> 4) & 0xF
-        if upper_nibble_pre != upper_nibble_post:
+        if (value_pre & 0xF) + (operand_byte & 0xF) + self.registers.read_C() > 0xF:
             self.registers.set_H()
         else:
             self.registers.clear_H()
@@ -350,7 +351,7 @@ class CPU:
             self.registers.set_Z()
         else:
             self.registers.clear_Z()
-        if value_pre > self.registers.A:
+        if (value_pre + operand_byte + self.registers.read_C()) > 0xFF:
             self.registers.set_C()
         else:
             self.registers.clear_C()
@@ -358,10 +359,8 @@ class CPU:
 
     def _subtract_uint8(self, operand_byte: int):
         value_pre = self.registers.A
-        upper_nibble_pre = (self.registers.A >> 4) & 0xF
         self.registers.A -= operand_byte
-        upper_nibble_post = (self.registers.A >> 4) & 0xF
-        if upper_nibble_pre != upper_nibble_post:
+        if (value_pre & 0xF) - (operand_byte & 0xF) < 0:
             self.registers.set_H()
         else:
             self.registers.clear_H()
@@ -369,7 +368,7 @@ class CPU:
             self.registers.set_Z()
         else:
             self.registers.clear_Z()
-        if value_pre < self.registers.A:
+        if value_pre - operand_byte < 0:
             self.registers.set_C()
         else:
             self.registers.clear_C()
@@ -377,10 +376,8 @@ class CPU:
 
     def _subtract_with_carry_uint8(self, operand_byte: int):
         value_pre = self.registers.A
-        upper_nibble_pre = (self.registers.A >> 4) & 0xF
         self.registers.A -= operand_byte + self.registers.read_C()
-        upper_nibble_post = (self.registers.A >> 4) & 0xF
-        if upper_nibble_pre != upper_nibble_post:
+        if (value_pre & 0xF) - (operand_byte & 0xF) - self.registers.read_C() < 0:
             self.registers.set_H()
         else:
             self.registers.clear_H()
@@ -388,7 +385,7 @@ class CPU:
             self.registers.set_Z()
         else:
             self.registers.clear_Z()
-        if value_pre < self.registers.A:
+        if value_pre - operand_byte - self.registers.read_C() < 0:
             self.registers.set_C()
         else:
             self.registers.clear_C()
@@ -427,10 +424,8 @@ class CPU:
 
     def _compare_uint8(self, operand_byte: int):
         value_pre = self.registers.A
-        upper_nibble_pre = (value_pre >> 4) & 0xF
         value = (self.registers.A + ((operand_byte ^ 0xFF) + 1) & 0xFF) & 0xFF
-        upper_nibble_post = (value >> 4) & 0xF
-        if upper_nibble_pre != upper_nibble_post:
+        if (value_pre & 0xF) - (operand_byte & 0xF) < 0:
             self.registers.set_H()
         else:
             self.registers.clear_H()
@@ -438,7 +433,7 @@ class CPU:
             self.registers.set_Z()
         else:
             self.registers.clear_Z()
-        if value_pre < value:
+        if value_pre - operand_byte < 0:
             self.registers.set_C()
         else:
             self.registers.clear_C()
@@ -512,7 +507,6 @@ class CPU:
         if opcode & 1 == 0:
             if DEBUG:
                 print(f"> INC {operand_repr}")
-            upper_nibble_pre = (operand_value >> 4) & 0xF
             new_value = operand_value + 1
             if dst_reg is None:
                 self.memory[self.registers.HL] = new_value
@@ -520,20 +514,18 @@ class CPU:
             else:
                 setattr(self.registers, dst_reg, new_value)
                 new_value = getattr(self.registers, dst_reg) # set again to guarantee overflow works alright
-            upper_nibble_post = (new_value >> 4) & 0xF
             self.registers.clear_N()
             if new_value == 0:
                 self.registers.set_Z()
             else:
                 self.registers.clear_Z()
-            if upper_nibble_pre != upper_nibble_post:
+            if (operand_value & 0xF) + 1 > 0xF:
                 self.registers.set_H()
             else:
                 self.registers.clear_H()
         elif opcode & 1 == 1:
             if DEBUG:
                 print(f"> DEC {operand_repr}")
-            upper_nibble_pre = (operand_value >> 4) & 0xF
             new_value = operand_value - 1
             if dst_reg is None:
                 self.memory[self.registers.HL] = new_value
@@ -541,13 +533,12 @@ class CPU:
             else:
                 setattr(self.registers, dst_reg, new_value)
                 new_value = getattr(self.registers, dst_reg)  # set again to guarantee overflow works alright
-            upper_nibble_post = (new_value >> 4) & 0xF
             self.registers.set_N()
             if new_value == 0:
                 self.registers.set_Z()
             else:
                 self.registers.clear_Z()
-            if upper_nibble_pre != upper_nibble_post:
+            if (operand_value & 0xF) - 1 < 0:
                 self.registers.set_H()
             else:
                 self.registers.clear_H()
@@ -565,35 +556,35 @@ class CPU:
 
         if (opcode >> 3) & 0x7 == 0x0:
             if DEBUG:
-                print(f"> ADD {operand_repr}")
+                print(f"> ADD {operand_repr} ({operand_value:02X})")
             self._add_uint8(operand_value)
         elif (opcode >> 3) & 0x7 == 0x1:
             if DEBUG:
-                print(f"> ADC {operand_repr}")
+                print(f"> ADC {operand_repr} ({operand_value:02X})")
             self._add_with_carry_uint8(operand_value)
         elif (opcode >> 3) & 0x7 == 0x2:
             if DEBUG:
-                print(f"> SUB {operand_repr}")
+                print(f"> SUB {operand_repr} ({operand_value:02X})")
             self._subtract_uint8(operand_value)
         elif (opcode >> 3) & 0x7 == 0x3:
             if DEBUG:
-                print(f"> SBC {operand_repr}")
+                print(f"> SBC {operand_repr} ({operand_value:02X})")
             self._subtract_with_carry_uint8(operand_value)
         elif (opcode >> 3) & 0x7 == 0x4:
             if DEBUG:
-                print(f"> AND {operand_repr}")
+                print(f"> AND {operand_repr} ({operand_value:02X})")
             self._and_uint8(operand_value)
         elif (opcode >> 3) & 0x7 == 0x5:
             if DEBUG:
-                print(f"> XOR {operand_repr}")
+                print(f"> XOR {operand_repr} ({operand_value:02X})")
             self._xor_uint8(operand_value)
         elif (opcode >> 3) & 0x7 == 0x6:
             if DEBUG:
-                print(f"> OR {operand_repr}")
+                print(f"> OR {operand_repr} ({operand_value:02X})")
             self._or_uint8(operand_value)
         elif (opcode >> 3) & 0x7 == 0x7:
             if DEBUG:
-                print(f"> CP {operand_repr}")
+                print(f"> CP {operand_repr} ({operand_value:02X})")
             self._compare_uint8(operand_value)
         else:
             raise ValueError(f"Unexpected opcode {opcode}, expected generic ALU instruction!")
@@ -722,14 +713,12 @@ class CPU:
             print(F"> ADD HL, {operand_repr}")
         value_pre = self.registers.HL
         # 16 bit addition uses the 8 bit ALU, LSB first then MSB, so the resulting flags apply to the high byte
-        upper_nibble_pre = (self.registers.H >> 4) & 0xF
         self.registers.HL += operand_value
-        upper_nibble_post = (self.registers.H >> 4) & 0xF
-        if upper_nibble_pre != upper_nibble_post:
+        if (value_pre & 0xF) + (operand_value & 0xF) > 0xF:
             self.registers.set_H()
         else:
             self.registers.clear_H()
-        if value_pre > self.registers.HL:
+        if value_pre + operand_value > 0xFF:
             self.registers.set_C()
         else:
             self.registers.clear_C()
@@ -766,20 +755,20 @@ class CPU:
         :param opcode:
         :return:
         """
-        dst_reg_i = (opcode >> 4) & 0x3
-        dst_reg = r16_map[dst_reg_i]
-
         if (opcode >> 5) & 1 == 1:
             dst_reg = "HL"
+        else:
+            dst_reg_i = (opcode >> 4) & 0x3
+            dst_reg = r16_map[dst_reg_i]
 
-        load_to_acc = (opcode >> 4) & 1 == 0
+        load_to_acc = (opcode >> 3) & 1 == 1
 
-        if (opcode >> 4) & 1 == 1: # LD (r16), A
-            self._load_to_r16_address(dst_reg)
-        else: # LD A, (r16)
+        if load_to_acc: # LD A, (r16)
             self._load_from_r16_address(dst_reg)
+        else: # LD (r16), A
+            self._load_to_r16_address(dst_reg)
 
-        if (opcode >> 5) & 1 == 1:
+        if dst_reg == "HL":
             if (opcode >> 4) & 1 == 0:
                 self.registers.HL += 1
                 if DEBUG:
@@ -865,24 +854,27 @@ class CPU:
             if DEBUG:
                 print(F"> LD HL, SP+e ({immediate:02X})")
 
-            value_pre = self.registers.HL
-            # 16 bit addition uses the 8 bit ALU, LSB first then MSB, so the resulting flags apply to the high byte
-            upper_nibble_pre = (self.registers.SP >> 4) & 0xF
+            value_pre = self.registers.SP
             result = self.registers.SP + immediate
-            upper_nibble_post = (result >> 4) & 0xF
 
+            # GB does 8 bit unsigned addition on the lower byte and then inc/dec the the upper one accordingly
+            # therefore flags are only affected by the lower byte
             self.registers.HL = result
-            if upper_nibble_pre != upper_nibble_post:
-                self.registers.set_H()
-            else:
-                self.registers.clear_H()
             if immediate > 0:
-                if value_pre > (self.registers.SP & 0xFF):
+                if (value_pre & 0xF) + (immediate & 0xF) > 0xF:
+                    self.registers.set_H()
+                else:
+                    self.registers.clear_H()
+                if (value_pre & 0xFF) + (immediate & 0xFF) > 0xFF:
                     self.registers.set_C()
                 else:
                     self.registers.clear_C()
             else:
-                if value_pre < (self.registers.SP & 0xFF):
+                if (value_pre & 0xF) - (immediate & 0xF) < 0:
+                    self.registers.set_H()
+                else:
+                    self.registers.clear_H()
+                if (value_pre & 0xFF) - (immediate & 0xFF) < 0:
                     self.registers.set_C()
                 else:
                     self.registers.clear_C()
@@ -1184,7 +1176,7 @@ class CPU:
 
     def _handle_add_SP_int8(self, opcode: int, extra_bytes: List[int]):
         """
-        Handles 'LD HL, SP+e' and 'LD SP, HL'
+        Handles 'ADD SP,e'
         :param opcode:
         :return:
         """
@@ -1194,22 +1186,26 @@ class CPU:
 
         value_pre = self.registers.SP
         # 16 bit addition uses the 8 bit ALU, LSB first then MSB, so the resulting flags apply to the high byte
-        upper_nibble_pre = (self.registers.SP >> 4) & 0xF
         result = self.registers.SP + immediate
-        upper_nibble_post = (result >> 4) & 0xF
 
         self.registers.SP = result
-        if upper_nibble_pre != upper_nibble_post:
-            self.registers.set_H()
-        else:
-            self.registers.clear_H()
         if immediate > 0:
-            if value_pre > (self.registers.SP & 0xFF):
+            if (value_pre & 0xF) + (immediate & 0xF) > 0xF:
+                self.registers.set_H()
+            else:
+                self.registers.clear_H()
+
+            if (value_pre & 0xFF) + (immediate & 0xFF) > 0xFF:
                 self.registers.set_C()
             else:
                 self.registers.clear_C()
         else:
-            if value_pre < (self.registers.SP & 0xFF):
+            if (value_pre & 0xF) - (immediate & 0xF) < 0:
+                self.registers.set_H()
+            else:
+                self.registers.clear_H()
+
+            if (value_pre & 0xFF) - (immediate & 0xFF) < 0:
                 self.registers.set_C()
             else:
                 self.registers.clear_C()
