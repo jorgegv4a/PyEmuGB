@@ -681,7 +681,7 @@ class CPU:
         :param opcode:
         :return:
         """
-        dst_reg_i = (opcode >> 4) & 0x5
+        dst_reg_i = (opcode >> 4) & 0x3
         dst_reg = r16_map[dst_reg_i]
         operand_value = getattr(self.registers, dst_reg)
         operand_repr = dst_reg
@@ -705,7 +705,7 @@ class CPU:
         :param opcode:
         :return:
         """
-        dst_reg_i = (opcode >> 4) & 0x5
+        dst_reg_i = (opcode >> 4) & 0x3
         dst_reg = r16_map[dst_reg_i]
         operand_value = getattr(self.registers, dst_reg)
         operand_repr = dst_reg
@@ -734,7 +734,7 @@ class CPU:
         :return:
         """
         immediate = bytes_to_uint16(extra_bytes)
-        dst_reg_i = (opcode >> 4) & 0x5
+        dst_reg_i = (opcode >> 4) & 0x3
         dst_reg = r16_map[dst_reg_i]
         operand_repr = dst_reg
 
@@ -764,15 +764,31 @@ class CPU:
         if (opcode >> 5) & 1 == 1:
             dst_reg = "HL"
 
+        load_to_acc = (opcode >> 4) & 1 == 0
+
         if (opcode >> 4) & 1 == 1: # LD (r16), A
             self._load_to_r16_address(dst_reg)
         else: # LD A, (r16)
             self._load_from_r16_address(dst_reg)
 
-        if (opcode >> 6) & 1 == 0:
-            self.registers.HL += 1
+        if (opcode >> 5) & 1 == 1:
+            if (opcode >> 4) & 1 == 0:
+                self.registers.HL += 1
+                if load_to_acc:
+                    print(f"> LD A, (HL+)")
+                else:
+                    print(f"> LD (HL+), A")
+            else:
+                self.registers.HL -= 1
+                if load_to_acc:
+                    print(f"> LD A, (HL-)")
+                else:
+                    print(f"> LD (HL-), A")
         else:
-            self.registers.HL -= 1
+            if load_to_acc:
+                print(f"> LD A, ({dst_reg})")
+            else:
+                print(f"> LD ({dst_reg}), A")
 
     def _handle_jump_relative_cond(self, opcode: int, extra_bytes: List[int]) -> bool:
         """
