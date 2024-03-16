@@ -1301,6 +1301,8 @@ class CPU:
         else:
             self.registers.clear_C()
         if output_value == 0:
+            self.registers.set_Z()
+        else:
             self.registers.clear_Z()
         self.registers.clear_N()
         self.registers.clear_H()
@@ -1327,6 +1329,8 @@ class CPU:
         else:
             self.registers.clear_C()
         if output_value == 0:
+            self.registers.set_Z()
+        else:
             self.registers.clear_Z()
         self.registers.clear_N()
         self.registers.clear_H()
@@ -1353,6 +1357,8 @@ class CPU:
         else:
             self.registers.clear_C()
         if output_value == 0:
+            self.registers.set_Z()
+        else:
             self.registers.clear_Z()
         self.registers.clear_N()
         self.registers.clear_H()
@@ -1379,6 +1385,8 @@ class CPU:
         else:
             self.registers.clear_C()
         if output_value == 0:
+            self.registers.set_Z()
+        else:
             self.registers.clear_Z()
         self.registers.clear_N()
         self.registers.clear_H()
@@ -1405,6 +1413,8 @@ class CPU:
         else:
             self.registers.clear_C()
         if output_value == 0:
+            self.registers.set_Z()
+        else:
             self.registers.clear_Z()
         self.registers.clear_N()
         self.registers.clear_H()
@@ -1431,6 +1441,8 @@ class CPU:
         else:
             self.registers.clear_C()
         if output_value == 0:
+            self.registers.set_Z()
+        else:
             self.registers.clear_Z()
         self.registers.clear_N()
         self.registers.clear_H()
@@ -1457,6 +1469,8 @@ class CPU:
         else:
             self.registers.clear_C()
         if output_value == 0:
+            self.registers.set_Z()
+        else:
             self.registers.clear_Z()
         self.registers.clear_N()
         self.registers.clear_H()
