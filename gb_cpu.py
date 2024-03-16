@@ -210,14 +210,28 @@ class CPU:
                 raise NotImplementedError(F"Unprefixed opcode not implemented: 0x{opcode:02X} ({opcode_dict['mnemonic']})")
 
         elif (opcode >> 8) == 0xCB:  # prefixed
-            raise NotImplementedError(F"Prefixed opcode not implemented: 0x{opcode:02X} ({opcode_dict['mnemonic']})")
+            low_opcode = opcode & 0xFF
+            if low_opcode & 0xC0 == 0x00:
+                self._handle_no_param_shifts(low_opcode)
+
+            elif low_opcode & 0xC0 == 0x40:
+                self._handle_bit_test(low_opcode) # bit test
+
+            elif low_opcode & 0xC0 == 0x80:
+                self._handle_bit_clear(low_opcode)
+
+            elif low_opcode & 0xC0 == 0xC0:
+                self._handle_bit_set(low_opcode)
+
+            else:
+                raise NotImplementedError(F"Prefixed opcode not implemented: 0x{opcode:02X} ({opcode_dict['mnemonic']})")
         else:
             raise NotImplementedError(F"Opcode not implemented: 0x{opcode:02X} ({opcode_dict['mnemonic']})")
 
         # Calls or Jumps take extra cycles
         self.tick(remaining_cycles)
         if self.memory[0xFF02] == 0x81:
-            print(f"{self.memory[0xFF01]}", end="")
+            print(f"{chr(self.memory[0xFF01])}", end="")
             self.memory[0xFF02] = 0
 
     def boot(self):
@@ -1212,6 +1226,328 @@ class CPU:
 
         self.registers.clear_Z()
         self.registers.clear_N()
+
+    def _handle_no_param_shifts(self, opcode: int):
+        """
+        Handles prefixed bit arith/logic instructions
+        :param opcode:
+        :return:
+        """
+        src_reg_i = opcode & 0x7
+        src_reg = r8_map.get(src_reg_i, None)
+        if src_reg is None:
+            operand_repr = "(HL)"
+        else:
+            operand_repr = src_reg
+
+        if (opcode >> 3) & 0x7 == 0x0:
+            if DEBUG:
+                print(f"> RLC {operand_repr}")
+            self._rotate_left_circular(src_reg)
+        elif (opcode >> 3) & 0x7 == 0x1:
+            if DEBUG:
+                print(f"> RRC {operand_repr}")
+            self._rotate_right_circular(src_reg)
+        elif (opcode >> 3) & 0x7 == 0x2:
+            if DEBUG:
+                print(f"> RL {operand_repr}")
+            self._rotate_left(src_reg)
+        elif (opcode >> 3) & 0x7 == 0x3:
+            if DEBUG:
+                print(f"> RR {operand_repr}")
+            self._rotate_right(src_reg)
+        elif (opcode >> 3) & 0x7 == 0x4:
+            if DEBUG:
+                print(f"> SLA {operand_repr}")
+            self._shift_left_arith(src_reg)
+        elif (opcode >> 3) & 0x7 == 0x5:
+            if DEBUG:
+                print(f"> SRA {operand_repr}")
+            self._shift_right_arith(src_reg)
+        elif (opcode >> 3) & 0x7 == 0x6:
+            if DEBUG:
+                print(f"> SWAP {operand_repr}")
+            self._swap(src_reg)
+        elif (opcode >> 3) & 0x7 == 0x7:
+            if DEBUG:
+                print(f"> SRL {operand_repr}")
+            self._shift_right_logic(src_reg)
+        else:
+            raise ValueError(f"Unexpected opcode {opcode}, expected generic BIT LOGIC instruction!")
+
+    def _rotate_left_circular(self, src_reg: str):
+        """
+        :param src_reg:
+        :return:
+        """
+        if src_reg == "(HL)":
+            operand_value = self.memory[self.registers.HL]
+        else:
+            operand_value = getattr(self.registers, src_reg)
+        top_bit = (operand_value >> 7) & 1
+        output_value = ((operand_value & 0x7F) << 1) | top_bit
+        if src_reg == "(HL)":
+            self.memory[self.registers.HL] = output_value
+            output_value = self.memory[self.registers.HL]  # set again to guarantee overflow works alright
+        else:
+            setattr(self.registers, src_reg, output_value)
+            output_value = getattr(self.registers, src_reg)  # set again to guarantee overflow works alright
+        if top_bit:
+            self.registers.set_C()
+        else:
+            self.registers.clear_C()
+        if output_value == 0:
+            self.registers.clear_Z()
+        self.registers.clear_N()
+        self.registers.clear_H()
+
+    def _rotate_right_circular(self, src_reg: str):
+        """
+        :param src_reg:
+        :return:
+        """
+        if src_reg == "(HL)":
+            operand_value = self.memory[self.registers.HL]
+        else:
+            operand_value = getattr(self.registers, src_reg)
+        bottom_bit = operand_value & 1
+        output_value = (operand_value >> 1) | (bottom_bit << 7)
+        if src_reg == "(HL)":
+            self.memory[self.registers.HL] = output_value
+            output_value = self.memory[self.registers.HL]  # set again to guarantee overflow works alright
+        else:
+            setattr(self.registers, src_reg, output_value)
+            output_value = getattr(self.registers, src_reg)  # set again to guarantee overflow works alright
+        if bottom_bit:
+            self.registers.set_C()
+        else:
+            self.registers.clear_C()
+        if output_value == 0:
+            self.registers.clear_Z()
+        self.registers.clear_N()
+        self.registers.clear_H()
+
+    def _rotate_left(self, src_reg: str):
+        """
+        :param src_reg:
+        :return:
+        """
+        if src_reg == "(HL)":
+            operand_value = self.memory[self.registers.HL]
+        else:
+            operand_value = getattr(self.registers, src_reg)
+        top_bit = (operand_value >> 7) & 1
+        output_value = ((operand_value & 0x7F) << 1) | self.registers.read_C()
+        if src_reg == "(HL)":
+            self.memory[self.registers.HL] = output_value
+            output_value = self.memory[self.registers.HL]  # set again to guarantee overflow works alright
+        else:
+            setattr(self.registers, src_reg, output_value)
+            output_value = getattr(self.registers, src_reg)  # set again to guarantee overflow works alright
+        if top_bit:
+            self.registers.set_C()
+        else:
+            self.registers.clear_C()
+        if output_value == 0:
+            self.registers.clear_Z()
+        self.registers.clear_N()
+        self.registers.clear_H()
+
+    def _rotate_right(self, src_reg: str):
+        """
+        :param src_reg:
+        :return:
+        """
+        if src_reg == "(HL)":
+            operand_value = self.memory[self.registers.HL]
+        else:
+            operand_value = getattr(self.registers, src_reg)
+        bottom_bit = operand_value & 1
+        output_value = (operand_value >> 1) | (self.registers.read_C() << 7)
+        if src_reg == "(HL)":
+            self.memory[self.registers.HL] = output_value
+            output_value = self.memory[self.registers.HL]  # set again to guarantee overflow works alright
+        else:
+            setattr(self.registers, src_reg, output_value)
+            output_value = getattr(self.registers, src_reg)  # set again to guarantee overflow works alright
+        if bottom_bit:
+            self.registers.set_C()
+        else:
+            self.registers.clear_C()
+        if output_value == 0:
+            self.registers.clear_Z()
+        self.registers.clear_N()
+        self.registers.clear_H()
+
+    def _shift_left_arith(self, src_reg: str):
+        """
+        :param src_reg:
+        :return:
+        """
+        if src_reg == "(HL)":
+            operand_value = self.memory[self.registers.HL]
+        else:
+            operand_value = getattr(self.registers, src_reg)
+        top_bit = (operand_value >> 7) & 1
+        output_value = ((operand_value & 0x7F) << 1)
+        if src_reg == "(HL)":
+            self.memory[self.registers.HL] = output_value
+            output_value = self.memory[self.registers.HL]  # set again to guarantee overflow works alright
+        else:
+            setattr(self.registers, src_reg, output_value)
+            output_value = getattr(self.registers, src_reg)  # set again to guarantee overflow works alright
+        if top_bit:
+            self.registers.set_C()
+        else:
+            self.registers.clear_C()
+        if output_value == 0:
+            self.registers.clear_Z()
+        self.registers.clear_N()
+        self.registers.clear_H()
+
+    def _shift_right_arith(self, src_reg: str):
+        """
+        :param src_reg:
+        :return:
+        """
+        if src_reg == "(HL)":
+            operand_value = self.memory[self.registers.HL]
+        else:
+            operand_value = getattr(self.registers, src_reg)
+        bottom_bit = operand_value & 1
+        output_value = (operand_value & 0x80) | (operand_value >> 1)
+        if src_reg == "(HL)":
+            self.memory[self.registers.HL] = output_value
+            output_value = self.memory[self.registers.HL]  # set again to guarantee overflow works alright
+        else:
+            setattr(self.registers, src_reg, output_value)
+            output_value = getattr(self.registers, src_reg)  # set again to guarantee overflow works alright
+        if bottom_bit:
+            self.registers.set_C()
+        else:
+            self.registers.clear_C()
+        if output_value == 0:
+            self.registers.clear_Z()
+        self.registers.clear_N()
+        self.registers.clear_H()
+
+    def _shift_right_logic(self, src_reg: str):
+        """
+        :param src_reg:
+        :return:
+        """
+        if src_reg == "(HL)":
+            operand_value = self.memory[self.registers.HL]
+        else:
+            operand_value = getattr(self.registers, src_reg)
+        bottom_bit = operand_value & 1
+        output_value = (operand_value >> 1)
+        if src_reg == "(HL)":
+            self.memory[self.registers.HL] = output_value
+            output_value = self.memory[self.registers.HL]  # set again to guarantee overflow works alright
+        else:
+            setattr(self.registers, src_reg, output_value)
+            output_value = getattr(self.registers, src_reg)  # set again to guarantee overflow works alright
+        if bottom_bit:
+            self.registers.set_C()
+        else:
+            self.registers.clear_C()
+        if output_value == 0:
+            self.registers.clear_Z()
+        self.registers.clear_N()
+        self.registers.clear_H()
+
+    def _swap(self, src_reg: str):
+        """
+        :param src_reg:
+        :return:
+        """
+        if src_reg == "(HL)":
+            operand_value = self.memory[self.registers.HL]
+        else:
+            operand_value = getattr(self.registers, src_reg)
+        output_value = ((operand_value & 0xF) << 4) | ((operand_value >> 4) & 0xF)
+        if src_reg == "(HL)":
+            self.memory[self.registers.HL] = output_value
+            output_value = self.memory[self.registers.HL]  # set again to guarantee overflow works alright
+        else:
+            setattr(self.registers, src_reg, output_value)
+            output_value = getattr(self.registers, src_reg)  # set again to guarantee overflow works alright
+        if output_value == 0:
+            self.registers.set_Z()
+        else:
+            self.registers.clear_Z()
+        self.registers.clear_H()
+        self.registers.clear_C()
+        self.registers.clear_N()
+
+    def _handle_bit_test(self, opcode: int):
+        """
+        Handles prefixed bit test instructions
+        :param opcode:
+        :return:
+        """
+        src_reg_i = opcode & 0x7
+        src_reg = r8_map.get(src_reg_i, None)
+        if src_reg is None:
+            operand_value = self.memory[self.registers.HL]
+            operand_repr = "(HL)"
+        else:
+            operand_value = getattr(self.registers, src_reg)
+            operand_repr = src_reg
+
+        bit_n = (opcode >> 3) & 0x7
+
+        print(f"> BIT {bit_n}, {operand_repr}")
+
+        if (operand_value >> bit_n) & 1 == 0:
+            self.registers.set_Z()
+        else:
+            self.registers.clear_Z()
+        self.registers.clear_N()
+        self.registers.set_H()
+
+    def _handle_bit_clear(self, opcode: int):
+        """
+        Handles prefixed bit clear instructions
+        :param opcode:
+        :return:
+        """
+        src_reg_i = opcode & 0x7
+        src_reg = r8_map.get(src_reg_i, None)
+        if src_reg is None:
+            operand_value = self.memory[self.registers.HL]
+            operand_repr = "(HL)"
+        else:
+            operand_value = getattr(self.registers, src_reg)
+            operand_repr = src_reg
+
+        bit_n = (opcode >> 3) & 0x7
+
+        print(f"> RES {bit_n}, {operand_repr}")
+        operand_value &= (0xFF ^ (1 << bit_n))
+
+    def _handle_bit_set(self, opcode: int):
+        """
+        Handles prefixed bit set instructions
+        :param opcode:
+        :return:
+        """
+        src_reg_i = opcode & 0x7
+        src_reg = r8_map.get(src_reg_i, None)
+        if src_reg is None:
+            operand_value = self.memory[self.registers.HL]
+            operand_repr = "(HL)"
+        else:
+            operand_value = getattr(self.registers, src_reg)
+            operand_repr = src_reg
+
+        bit_n = (opcode >> 3) & 0x7
+
+        print(f"> SET {bit_n}, {operand_repr}")
+        operand_value |= 1 << bit_n
+
+
 
     def __str__(self):
         return f'{self.registers} | IME: {self.IME} | T: {self.clock} | LCDC: {self.memory[0xFF40]:02X} | STAT: {self.memory[0xFF41]:02X} | LY: {self.memory[0xFF44]:02X}'

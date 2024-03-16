@@ -1,7 +1,7 @@
 from general import txt
 
 
-def main():
+def unprefixed():
     src_regs = {
         0: 'B',
         1: 'C',
@@ -185,5 +185,118 @@ def main():
     print(text)
 
 
+
+def prefixed():
+    src_regs = {
+        0: 'B',
+        1: 'C',
+        2: 'D',
+        3: 'E',
+        4: 'H',
+        5: 'L',
+        7: 'A',
+    }
+    dst_regs = {
+        0: 'B',
+        1: 'C',
+        2: 'D',
+        3: 'E',
+        4: 'H',
+        5: 'L',
+        7: 'A',
+    }
+
+    text = ""
+    for opcode in range(0x00, 0x100):
+        bin_str = f"{opcode:02X}"
+        instruction = txt(f"{bin_str}")
+        # bin_str = f"{opcode:08b}"
+        if opcode & 0xF8 == 0x00:
+            src_reg_i = opcode & 0x7
+            src_reg = src_regs.get(src_reg_i, None)
+            if src_reg is None:
+                src_reg = "(HL)"
+            instruction = txt(f"% y RLC {src_reg}")
+        elif opcode & 0xF8 == 0x08:
+            src_reg_i = opcode & 0x7
+            src_reg = src_regs.get(src_reg_i, None)
+            if src_reg is None:
+                src_reg = "(HL)"
+            instruction = txt(f"% b RRC {src_reg}")
+
+        elif opcode & 0xF8 == 0x10:
+            src_reg_i = opcode & 0x7
+            src_reg = src_regs.get(src_reg_i, None)
+            if src_reg is None:
+                src_reg = "(HL)"
+            instruction = txt(f"%kY RL {src_reg}")
+        elif opcode & 0xF8 == 0x18:
+            src_reg_i = opcode & 0x7
+            src_reg = src_regs.get(src_reg_i, None)
+            if src_reg is None:
+                src_reg = "(HL)"
+            instruction = txt(f"%kB RR {src_reg}")
+
+        elif opcode & 0xF8 == 0x20:
+            src_reg_i = opcode & 0x7
+            src_reg = src_regs.get(src_reg_i, None)
+            if src_reg is None:
+                src_reg = "(HL)"
+            instruction = txt(f"%yk SLA {src_reg}")
+        elif opcode & 0xF8 == 0x28:
+            src_reg_i = opcode & 0x7
+            src_reg = src_regs.get(src_reg_i, None)
+            if src_reg is None:
+                src_reg = "(HL)"
+            instruction = txt(f"%bk SRA {src_reg}")
+
+        elif opcode & 0xF8 == 0x30:
+            src_reg_i = opcode & 0x7
+            src_reg = src_regs.get(src_reg_i, None)
+            if src_reg is None:
+                src_reg = "(HL)"
+            instruction = txt(f"%YK SWAP {src_reg}")
+        elif opcode & 0xF8 == 0x38:
+            src_reg_i = opcode & 0x7
+            src_reg = src_regs.get(src_reg_i, None)
+            if src_reg is None:
+                src_reg = "(HL)"
+            instruction = txt(f"%BK SRL {src_reg}")
+
+        elif opcode & 0xC0 == 0x40:
+            src_reg_i = opcode & 0x7
+            src_reg = src_regs.get(src_reg_i, None)
+            if src_reg is None:
+                src_reg = "(HL)"
+
+            bit_n = (opcode >> 3) & 0x7
+            instruction = txt(f"%km BIT {bit_n}, {src_reg}")
+
+        elif opcode & 0xC0 == 0x80:
+            src_reg_i = opcode & 0x7
+            src_reg = src_regs.get(src_reg_i, None)
+            if src_reg is None:
+                src_reg = "(HL)"
+
+            bit_n = (opcode >> 3) & 0x7
+            instruction = txt(f"%rW RES {bit_n}, {src_reg}")
+
+        elif opcode & 0xC0 == 0xC0:
+            src_reg_i = opcode & 0x7
+            src_reg = src_regs.get(src_reg_i, None)
+            if src_reg is None:
+                src_reg = "(HL)"
+
+            bit_n = (opcode >> 3) & 0x7
+            instruction = txt(f"%kg SET {bit_n}, {src_reg}")
+
+        if (opcode + 1) % 0x10 != 0:
+            text += f"{instruction}, "
+        else:
+            text += "\n"
+    print(text)
+
+
 if __name__ == "__main__":
-    main()
+    # unprefixed()
+    prefixed()
