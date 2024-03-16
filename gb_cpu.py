@@ -659,6 +659,8 @@ class CPU:
         """
         dst_reg_i = (opcode >> 4) & 0x3
         dst_reg = r16_map[dst_reg_i]
+        if dst_reg == "SP":
+            dst_reg = "AF"
         if DEBUG:
             print(f"> POP {dst_reg}")
 
@@ -673,6 +675,8 @@ class CPU:
         """
         src_reg_i = (opcode >> 4) & 0x3
         src_reg = r16_map[src_reg_i]
+        if src_reg == "SP":
+            src_reg = "AF"
         if DEBUG:
             print(f"> PUSH {src_reg}")
 
