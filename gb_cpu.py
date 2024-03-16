@@ -778,21 +778,24 @@ class CPU:
         if (opcode >> 5) & 1 == 1:
             if (opcode >> 4) & 1 == 0:
                 self.registers.HL += 1
-                if load_to_acc:
-                    print(f"> LD A, (HL+)")
-                else:
-                    print(f"> LD (HL+), A")
+                if DEBUG:
+                    if load_to_acc:
+                        print(f"> LD A, (HL+)")
+                    else:
+                        print(f"> LD (HL+), A")
             else:
                 self.registers.HL -= 1
-                if load_to_acc:
-                    print(f"> LD A, (HL-)")
-                else:
-                    print(f"> LD (HL-), A")
+                if DEBUG:
+                    if load_to_acc:
+                        print(f"> LD A, (HL-)")
+                    else:
+                        print(f"> LD (HL-), A")
         else:
-            if load_to_acc:
-                print(f"> LD A, ({dst_reg})")
-            else:
-                print(f"> LD ({dst_reg}), A")
+            if DEBUG:
+                if load_to_acc:
+                    print(f"> LD A, ({dst_reg})")
+                else:
+                    print(f"> LD ({dst_reg}), A")
 
     def _handle_jump_relative_cond(self, opcode: int, extra_bytes: List[int]) -> bool:
         """
@@ -1011,15 +1014,29 @@ class CPU:
             else:
                 address = bytes_to_uint16(extra_bytes)
 
-            if (opcode >> 3) & 0x1 == 0:
+            if (opcode >> 4) & 0x1 == 0:
+                if DEBUG:
+                    if (opcode >> 3) & 1 == 0:
+                        print(F"> LDH (C), A")
+                    else:
+                        print(F"> LD (nn), A ({address:04X})")
                 self.memory[address] = self.registers.A
-            elif (opcode >> 3) & 0x1 == 2:
+            else:
+                if DEBUG:
+                    if (opcode >> 3) & 1 == 0:
+                        print(F"> LDH A, (C)")
+                    else:
+                        print(F"> LD A, (nn) ({address:04X})")
                 self.registers.A = self.memory[address]
         else:
             address = 0xFF00 | extra_bytes[0]
             if (opcode >> 4) & 1 == 0:
+                if DEBUG:
+                    print(F"> LDH (n), A ({extra_bytes[0]:02X})")
                 self.memory[address] = self.registers.A
             else:
+                if DEBUG:
+                    print(F"> LDH A, (n) ({extra_bytes[0]:02X})")
                 self.registers.A = self.memory[address]
 
     def _handle_return_cond(self, opcode: int) -> bool:
