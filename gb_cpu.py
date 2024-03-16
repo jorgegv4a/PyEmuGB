@@ -5,6 +5,9 @@ from gb_ops import opcodes
 from gb_constants import CARTRIDGE_ROM_ONLY
 from gb_graphics import LCDController, get_tiles
 
+# DEBUG = True
+DEBUG = False
+
 r8_map = {
     0: 'B',
     1: 'C',
@@ -86,42 +89,21 @@ class CPU:
         remaining_cycles = opcode_dict["cycles"][0] - (self.clock - start_clock_t)
 
         if opcode == 0x00: # NOP
-            print("> NOP")
-
+            if DEBUG:
+                print("> NOP")
+            pass
         elif opcode == 0x10: # STOP
-            print("> STOP")
+            if DEBUG:
+                print("> STOP")
+            pass
             # TODO: stop clock, disable LCD, wait until joypad interrupt
-        # -- LOADS
-        # ---- LOAD FROM SINGLE REGISTER TO SINGLE REGISTER
+
+        # LOADS
         elif (0x40 <= opcode < 0x80) and opcode != 0x76:
             self._handle_no_param_loads(opcode)
 
-        elif 0x80 <= opcode < 0xC0:
-            self._handle_no_param_alu(opcode)
-
-        elif opcode & 0xC6 == 0x04:
-            self._handle_inc_dec_r8(opcode)
-
-        elif opcode & 0xC7 == 0xC6:
-            self._handle_d8_alu(opcode, extra_bytes)
-
         elif opcode & 0xC7 == 0x06:
             self._handle_d8_loads(opcode, extra_bytes)
-
-        elif opcode & 0xC7 == 0xC7:
-            self._handle_reset_vector(opcode)
-
-        elif opcode & 0xCF == 0xC1:
-            self._handle_r16_pop(opcode)
-
-        elif opcode & 0xCF == 0xC5:
-            self._handle_r16_push(opcode)
-
-        elif opcode & 0xC7 == 0x03:
-            self._handle_inc_dec_r16(opcode)
-
-        elif opcode & 0xCF == 0x09:
-            self._handle_add_r16(opcode)
 
         elif opcode & 0xCF == 0x01:
             self._handle_load_d16_to_r16(opcode, extra_bytes)
@@ -129,32 +111,14 @@ class CPU:
         elif opcode & 0xC7 == 0x02:
             self._handle_indirect_loads(opcode)
 
-        elif opcode & 0xE7 == 0x20:
-            branch = self._handle_jump_relative_cond(opcode, extra_bytes)
-            if not branch:
-                remaining_cycles = opcode_dict["cycles"][1] - (self.clock - start_clock_t)
-
-        # ---- RELATIVE JUMP
-        elif opcode == 0x18:  # JR e
-            self._handle_jump_relative(opcode, extra_bytes)
-
         elif opcode & 0xFE == 0xF8:
             self._handle_load_r16_to_r16(opcode, extra_bytes)
 
-        elif opcode & 0xE7 == 0x07:
-            self._handle_rotate_accumulator(opcode)
-
-        elif opcode & 0xE7 == 0x27:
-            self._handle_accumulator_misc(opcode)
-
         elif opcode & 0xE5 == 0xE0 and opcode & 0xEF != 0xE8:
             self._handle_misc_indirect_loads(opcode, extra_bytes)
+        # -----------------
 
-        elif opcode & 0xE7 == 0xC0:
-            branch = self._handle_return_cond(opcode)
-            if not branch:
-                remaining_cycles = opcode_dict["cycles"][1] - (self.clock - start_clock_t)
-
+        # JUMPS
         elif opcode & 0xE7 == 0xC2:
             branch = self._handle_jump_d16_cond(opcode, extra_bytes)
             if not branch:
@@ -166,39 +130,86 @@ class CPU:
         elif opcode == 0xE9:
             self._handle_jump_absolute_HL(opcode, extra_bytes)
 
+        elif opcode & 0xE7 == 0x20:
+            branch = self._handle_jump_relative_cond(opcode, extra_bytes)
+            if not branch:
+                remaining_cycles = opcode_dict["cycles"][1] - (self.clock - start_clock_t)
+
+        elif opcode == 0x18:
+            self._handle_jump_relative(opcode, extra_bytes)
+        # -----------------
+
+        # ARITHMETIC/LOGIC
+        elif 0x80 <= opcode < 0xC0:
+            self._handle_no_param_alu(opcode)
+
+        elif opcode & 0xC7 == 0xC6:
+            self._handle_d8_alu(opcode, extra_bytes)
+
+        elif opcode & 0xE7 == 0x27:
+            self._handle_accumulator_misc(opcode)
+
+        elif opcode & 0xC6 == 0x04:
+            self._handle_inc_dec_r8(opcode)
+
+        elif opcode & 0xC7 == 0x03:
+            self._handle_inc_dec_r16(opcode)
+
+        elif opcode & 0xCF == 0x09:
+            self._handle_add_r16(opcode)
+
+        elif opcode == 0xE8:
+            self._handle_add_SP_int8(opcode, extra_bytes)
+
+        elif opcode & 0xCF == 0xC1:
+            self._handle_r16_pop(opcode)
+
+        elif opcode & 0xCF == 0xC5:
+            self._handle_r16_push(opcode)
+
+        elif opcode & 0xE7 == 0x07:
+            self._handle_rotate_accumulator(opcode)
+        # -----------------
+
+        # CALL/RESET/RETURN
         elif opcode & 0xE7 == 0xC4:
             self._handle_call_cond(opcode, extra_bytes)
 
         elif opcode == 0xCD:
             self._handle_call_d16(opcode, extra_bytes)
 
+        elif opcode & 0xC7 == 0xC7:
+            self._handle_reset_vector(opcode)
+
         elif opcode & 0xEF == 0xC9:
             self._handle_return(opcode)
 
-        elif opcode == 0xE8:
-            self._handle_add_SP_int8(opcode, extra_bytes)
+        elif opcode & 0xE7 == 0xC0:
+            branch = self._handle_return_cond(opcode)
+            if not branch:
+                remaining_cycles = opcode_dict["cycles"][1] - (self.clock - start_clock_t)
+        # -----------------
 
         # -- INTERRUPT CONTROL
-        # ---- DISABLE INTERRUPTS
         elif opcode == 0xF3: # DI
-            print(F"> DI")
+            if DEBUG:
+                print(F"> DI")
             self.IME = 0
 
-        # ---- ENABLE INTERRUPTS
         elif opcode == 0xFB: # EI
-            print(f"> EI")
+            if DEBUG:
+                print(f"> EI")
             self.IME = 1 # TODO: should be done after the next cycle, not immediately
+        # -----------------
 
-        # The instructions CALL, PUSH, and RST all put
-        # information onto the stack. The instructions POP, RET,
-        # and RETI all take information off of the stack.
-        # (Interrupts put a return address on the stack and
-        # remove it at their completion as well.)
         else:
             raise NotImplementedError(F"Opcode not implemented: 0x{opcode:02X} ({opcode_dict['mnemonic']})")
 
         # Calls or Jumps take extra cycles
         self.tick(remaining_cycles)
+        if self.memory[0xFF02] == 0x81:
+            print(f"{self.memory[0xFF01]}", end="")
+            self.memory[0xFF02] = 0
 
     def boot(self):
         # TODO: implement power up sequence checks + graphics
@@ -245,7 +256,8 @@ class CPU:
         self.boot()
         while True:
             # print(F"PC: 0x{self.registers.PC:04X}")
-            print(F"{self}")
+            if DEBUG:
+                print(F"{self}")
             opcode = self.fetch()
             opcode_dict, opcode = self.decode(opcode)
             instr_str = f"{opcode:02X} ({opcode_dict['cycles']}) {opcode_dict['mnemonic']}"
@@ -253,7 +265,8 @@ class CPU:
                 instr_str += f" {opcode_dict['operand1']}"
             if "operand2" in opcode_dict:
                 instr_str += f", {opcode_dict['operand2']}"
-            print(f"\t{instr_str}")
+            if DEBUG:
+                print(f"\t{instr_str}")
             self.execute(opcode, opcode_dict)
 
     def _load_to_r8(self, dst_reg: str, value: int):
@@ -263,17 +276,20 @@ class CPU:
         return getattr(self.registers, src_reg)
 
     def _load_to_HL(self, src_reg: str):
-        print(f"> LD (HL), {src_reg}")
+        if DEBUG:
+            print(f"> LD (HL), {src_reg}")
         value = self._read_r8(src_reg)
         self.memory[self.registers.HL] = value
 
     def _load_from_HL(self, dst_reg: str):
-        print(f"> LD {dst_reg}, (HL)")
+        if DEBUG:
+            print(f"> LD {dst_reg}, (HL)")
         value = self.memory[self.registers.HL]
         self._load_to_r8(dst_reg, value)
 
     def _load_r8_to_r8(self, dst_reg: str, src_reg: str):
-        print(f"> LD {dst_reg}, {src_reg}")
+        if DEBUG:
+            print(f"> LD {dst_reg}, {src_reg}")
         value = self._read_r8(src_reg)
         self._load_to_r8(dst_reg, value)
 
@@ -290,9 +306,9 @@ class CPU:
         dst_reg = r8_map.get(dst_reg_i, None)
         if (opcode >> 6) & 0x03 == 1:
             if src_reg is None:
-                self._load_to_HL(dst_reg)
+                self._load_from_HL(dst_reg)
             elif dst_reg is None:
-                self._load_from_HL(src_reg)
+                self._load_to_HL(src_reg)
             else:
                 self._load_r8_to_r8(dst_reg, src_reg)
         else:
@@ -440,28 +456,36 @@ class CPU:
             operand_repr = src_reg
 
         if (opcode >> 3) & 0x7 == 0x0:
-            print(f"> ADD {operand_repr}")
+            if DEBUG:
+                print(f"> ADD {operand_repr}")
             self._add_uint8(operand_value)
         elif (opcode >> 3) & 0x7 == 0x1:
-            print(f"> ADC {operand_repr}")
+            if DEBUG:
+                print(f"> ADC {operand_repr}")
             self._add_with_carry_uint8(operand_value)
         elif (opcode >> 3) & 0x7 == 0x2:
-            print(f"> SUB {operand_repr}")
+            if DEBUG:
+                print(f"> SUB {operand_repr}")
             self._subtract_uint8(operand_value)
         elif (opcode >> 3) & 0x7 == 0x3:
-            print(f"> SBC {operand_repr}")
+            if DEBUG:
+                print(f"> SBC {operand_repr}")
             self._subtract_with_carry_uint8(operand_value)
         elif (opcode >> 3) & 0x7 == 0x4:
-            print(f"> AND {operand_repr}")
+            if DEBUG:
+                print(f"> AND {operand_repr}")
             self._and_uint8(operand_value)
         elif (opcode >> 3) & 0x7 == 0x5:
-            print(f"> XOR {operand_repr}")
+            if DEBUG:
+                print(f"> XOR {operand_repr}")
             self._xor_uint8(operand_value)
         elif (opcode >> 3) & 0x7 == 0x6:
-            print(f"> OR {operand_repr}")
+            if DEBUG:
+                print(f"> OR {operand_repr}")
             self._or_uint8(operand_value)
         elif (opcode >> 3) & 0x7 == 0x7:
-            print(f"> CP {operand_repr}")
+            if DEBUG:
+                print(f"> CP {operand_repr}")
             self._compare_uint8(operand_value)
         else:
             raise ValueError(f"Unexpected opcode {opcode}, expected generic ALU instruction!")
@@ -482,7 +506,8 @@ class CPU:
             operand_repr = dst_reg
 
         if opcode & 1 == 0:
-            print(f"> INC {operand_repr}")
+            if DEBUG:
+                print(f"> INC {operand_repr}")
             upper_nibble_pre = (operand_value >> 4) & 0xF
             new_value = operand_value + 1
             if dst_reg is None:
@@ -502,7 +527,8 @@ class CPU:
             else:
                 self.registers.clear_H()
         elif opcode & 1 == 1:
-            print(f"> DEC {operand_repr}")
+            if DEBUG:
+                print(f"> DEC {operand_repr}")
             upper_nibble_pre = (operand_value >> 4) & 0xF
             new_value = operand_value - 1
             if dst_reg is None:
@@ -534,28 +560,36 @@ class CPU:
         operand_repr = "n"
 
         if (opcode >> 3) & 0x7 == 0x0:
-            print(f"> ADD {operand_repr}")
+            if DEBUG:
+                print(f"> ADD {operand_repr}")
             self._add_uint8(operand_value)
         elif (opcode >> 3) & 0x7 == 0x1:
-            print(f"> ADC {operand_repr}")
+            if DEBUG:
+                print(f"> ADC {operand_repr}")
             self._add_with_carry_uint8(operand_value)
         elif (opcode >> 3) & 0x7 == 0x2:
-            print(f"> SUB {operand_repr}")
+            if DEBUG:
+                print(f"> SUB {operand_repr}")
             self._subtract_uint8(operand_value)
         elif (opcode >> 3) & 0x7 == 0x3:
-            print(f"> SBC {operand_repr}")
+            if DEBUG:
+                print(f"> SBC {operand_repr}")
             self._subtract_with_carry_uint8(operand_value)
         elif (opcode >> 3) & 0x7 == 0x4:
-            print(f"> AND {operand_repr}")
+            if DEBUG:
+                print(f"> AND {operand_repr}")
             self._and_uint8(operand_value)
         elif (opcode >> 3) & 0x7 == 0x5:
-            print(f"> XOR {operand_repr}")
+            if DEBUG:
+                print(f"> XOR {operand_repr}")
             self._xor_uint8(operand_value)
         elif (opcode >> 3) & 0x7 == 0x6:
-            print(f"> OR {operand_repr}")
+            if DEBUG:
+                print(f"> OR {operand_repr}")
             self._or_uint8(operand_value)
         elif (opcode >> 3) & 0x7 == 0x7:
-            print(f"> CP {operand_repr}")
+            if DEBUG:
+                print(f"> CP {operand_repr}")
             self._compare_uint8(operand_value)
         else:
             raise ValueError(f"Unexpected opcode {opcode}, expected generic ALU instruction!")
@@ -571,10 +605,12 @@ class CPU:
         dst_reg_i = (opcode >> 3) & 0x7
         dst_reg = r8_map.get(dst_reg_i, None)
         if dst_reg is None:
-            print(f"> LD (HL), n")
+            if DEBUG:
+                print(f"> LD (HL), n ({operand_value:02X})")
             self.memory[self.registers.HL] = operand_value
         else:
-            print(f"> LD {dst_reg}, n")
+            if DEBUG:
+                print(f"> LD {dst_reg}, n ({operand_value:02X})")
             self._load_to_r8(dst_reg, operand_value)
 
     def _push_stack(self, d16_operand: int):
@@ -605,7 +641,8 @@ class CPU:
         """
         # 0b11xxx111
         dst_address = ((opcode >> 3) & 0x7) * 8
-        print(f"> RST 0x{dst_address:02X}")
+        if DEBUG:
+            print(f"> RST 0x{dst_address:02X}")
         self._push_stack(self.registers.PC)
         self.registers.write_PC(dst_address)
         # tick(1)
@@ -618,7 +655,8 @@ class CPU:
         """
         dst_reg_i = (opcode >> 4) & 0x3
         dst_reg = r16_map[dst_reg_i]
-        print(f"> POP {dst_reg}")
+        if DEBUG:
+            print(f"> POP {dst_reg}")
 
         d16_value = self._pop_stack()
         setattr(self.registers, dst_reg, d16_value)
@@ -631,7 +669,8 @@ class CPU:
         """
         src_reg_i = (opcode >> 4) & 0x3
         src_reg = r16_map[src_reg_i]
-        print(f"> PUSH {src_reg}")
+        if DEBUG:
+            print(f"> PUSH {src_reg}")
 
         d16_operand = getattr(self.registers, src_reg)
         self._push_stack(d16_operand)
@@ -648,10 +687,12 @@ class CPU:
         operand_repr = dst_reg
 
         if (opcode >> 3) & 1 == 0:
-            print(f"> INC {operand_repr}")
+            if DEBUG:
+                print(f"> INC {operand_repr}")
             new_value = operand_value + 1
         elif (opcode >> 3) & 1 == 1:
-            print(f"> DEC {operand_repr}")
+            if DEBUG:
+                print(f"> DEC {operand_repr}")
             new_value = operand_value - 1
         else:
             raise ValueError(f"Unexpected opcode {opcode}, expected generic ALU instruction!")
@@ -669,7 +710,8 @@ class CPU:
         operand_value = getattr(self.registers, dst_reg)
         operand_repr = dst_reg
 
-        print(F"> ADD HL, {operand_repr}")
+        if DEBUG:
+            print(F"> ADD HL, {operand_repr}")
         value_pre = self.registers.HL
         # 16 bit addition uses the 8 bit ALU, LSB first then MSB, so the resulting flags apply to the high byte
         upper_nibble_pre = (self.registers.H >> 4) & 0xF
@@ -696,7 +738,8 @@ class CPU:
         dst_reg = r16_map[dst_reg_i]
         operand_repr = dst_reg
 
-        print(F"> LD {operand_repr}, d16")
+        if DEBUG:
+            print(F"> LD {operand_repr}, d16 ({immediate:04X})")
         setattr(self.registers, dst_reg, immediate)
 
     def _load_to_r16_address(self, dst_reg: str):
@@ -711,7 +754,7 @@ class CPU:
 
     def _handle_indirect_loads(self, opcode: int):
         """
-        Handles LD instructions for double immediate to double register
+        Handles LD instructions for indirect double register to A and viceversa
         :param opcode:
         :return:
         """
@@ -721,7 +764,7 @@ class CPU:
         if (opcode >> 5) & 1 == 1:
             dst_reg = "HL"
 
-        if (opcode >> 4) & 1 == 0: # LD (r16), A
+        if (opcode >> 4) & 1 == 1: # LD (r16), A
             self._load_to_r16_address(dst_reg)
         else: # LD A, (r16)
             self._load_from_r16_address(dst_reg)
@@ -750,12 +793,13 @@ class CPU:
             condition = self.registers.read_C()
             cond_repr = "C"
 
-        print(F"> JR {cond_repr}, e")
+        immediate = byte_to_int8(extra_bytes[0])
+        if DEBUG:
+            print(F"> JR {cond_repr}, e, ({immediate:02X})")
 
         if not condition:
             return False
 
-        immediate = byte_to_int8(extra_bytes[0])
         self.registers.write_PC(self.registers.PC + immediate)
         return True
 
@@ -765,8 +809,9 @@ class CPU:
         :param opcode:
         :return: True if condition is met (branch execution), False otherwise
         """
-        print(F"> JR e")
         immediate = byte_to_int8(extra_bytes[0])
+        if DEBUG:
+            print(F"> JR e ({immediate:02X})")
         self.registers.write_PC(self.registers.PC + immediate)
         return True
 
@@ -777,7 +822,8 @@ class CPU:
         :return:
         """
         immediate = bytes_to_uint16(extra_bytes)
-        print(F"> LD (d16), SP")
+        if DEBUG:
+            print(F"> LD (d16), SP ({immediate:04X})")
         self.memory[immediate] = self.registers.SP & 0xFF
         self.memory[immediate + 1] = (self.registers.SP >> 8) & 0xFF
 
@@ -788,8 +834,9 @@ class CPU:
         :return:
         """
         if opcode & 1 == 0: # LD HL, SP+e
-            print(F"> LD HL, SP+e")
             immediate = byte_to_int8(extra_bytes[0])
+            if DEBUG:
+                print(F"> LD HL, SP+e ({immediate:02X})")
 
             value_pre = self.registers.HL
             # 16 bit addition uses the 8 bit ALU, LSB first then MSB, so the resulting flags apply to the high byte
@@ -816,7 +863,8 @@ class CPU:
             self.registers.clear_Z()
             self.registers.clear_N()
         else:
-            print(F"> LD SP, HL")
+            if DEBUG:
+                print(F"> LD SP, HL")
             self.registers.SP = self.registers.HL
 
     def _handle_rotate_accumulator(self, opcode: int):
@@ -826,7 +874,8 @@ class CPU:
         :return:
         """
         if (opcode >> 3) & 0x3 == 0x0:
-            print(F"> RLCA")
+            if DEBUG:
+                print(F"> RLCA")
             top_bit = (self.registers.A >> 7) & 1
             self.registers.A = ((self.registers.A & 0x7F) << 1) | top_bit
             if top_bit:
@@ -837,7 +886,8 @@ class CPU:
             self.registers.clear_N()
             self.registers.clear_H()
         elif (opcode >> 3) & 0x3 == 0x1:
-            print(F"> RRCA")
+            if DEBUG:
+                print(F"> RRCA")
             bottom_bit = self.registers.A & 1
             self.registers.A = (self.registers.A >> 1) | (bottom_bit << 7)
             if bottom_bit:
@@ -848,7 +898,8 @@ class CPU:
             self.registers.clear_N()
             self.registers.clear_H()
         elif (opcode >> 3) & 0x3 == 0x2:
-            print(F"> RLA")
+            if DEBUG:
+                print(F"> RLA")
             top_bit = (self.registers.A >> 7) & 1
             self.registers.A = ((self.registers.A & 0x7F) << 1) | self.registers.read_C()
             if top_bit:
@@ -859,7 +910,8 @@ class CPU:
             self.registers.clear_N()
             self.registers.clear_H()
         elif (opcode >> 3) & 0x3 == 0x3:
-            print(F"> RRA")
+            if DEBUG:
+                print(F"> RRA")
             bottom_bit = self.registers.A & 1
             self.registers.A = (self.registers.A >> 1) | (self.registers.read_C() << 7)
             if bottom_bit:
@@ -915,10 +967,12 @@ class CPU:
         :return:
         """
         if (opcode >> 3) & 0 == 0:
-            print(f"> DAA")
+            if DEBUG:
+                print(f"> DAA")
             self._decimal_adjust_acc()
         elif (opcode >> 3) & 0 == 1:
-            print(f"> CPL")
+            if DEBUG:
+                print(f"> CPL")
             self._complement_acc()
         elif (opcode >> 3) & 0 == 2:
             self._set_carry_flag()
@@ -967,7 +1021,8 @@ class CPU:
             condition = self.registers.read_C()
             cond_repr = "C"
 
-        print(F"> RET {cond_repr}")
+        if DEBUG:
+            print(F"> RET {cond_repr}")
 
         if not condition:
             return False
@@ -995,12 +1050,13 @@ class CPU:
             condition = self.registers.read_C()
             cond_repr = "C"
 
-        print(F"> JP {cond_repr}, nn")
+        address = bytes_to_uint16(extra_bytes)
+        if DEBUG:
+            print(F"> JP {cond_repr}, nn ({address:04X})")
 
         if not condition:
             return False
 
-        address = bytes_to_uint16(extra_bytes)
         self.registers.write_PC(address)
         return True
 
@@ -1010,8 +1066,9 @@ class CPU:
         :param opcode:
         :return: True if condition is met (branch execution), False otherwise
         """
-        print(F"> JP nn")
         address = bytes_to_uint16(extra_bytes)
+        if DEBUG:
+            print(F"> JP nn ({address:04X})")
         self.registers.write_PC(address)
 
     def _handle_jump_absolute_HL(self, opcode: int, extra_bytes: List[int]):
@@ -1020,7 +1077,8 @@ class CPU:
         :param opcode:
         :return: True if condition is met (branch execution), False otherwise
         """
-        print(F"> JP HL")
+        if DEBUG:
+            print(F"> JP HL")
         address = self.registers.HL
         self.registers.write_PC(address)
 
@@ -1043,12 +1101,13 @@ class CPU:
             condition = self.registers.read_C()
             cond_repr = "C"
 
-        print(F"> CALL {cond_repr}, nn")
+        address = bytes_to_uint16(extra_bytes)
+        if DEBUG:
+            print(F"> CALL {cond_repr}, nn ({address:04X})")
 
         if not condition:
             return False
 
-        address = bytes_to_uint16(extra_bytes)
         self._push_stack(self.registers.PC)
         self.registers.write_PC(address)
         return True
@@ -1059,8 +1118,9 @@ class CPU:
         :param opcode:
         :return:
         """
-        print("> CALL nn")
         address = bytes_to_uint16(extra_bytes)
+        if DEBUG:
+            print(f"> CALL nn ({address:04X})")
         self._push_stack(self.registers.PC)
         self.registers.write_PC(address)
 
@@ -1073,10 +1133,13 @@ class CPU:
         address = self._pop_stack()
         self.registers.write_PC(address)
         if (opcode >> 4) & 1 == 1:
-            print("> RETI")
+            if DEBUG:
+                print("> RETI")
             self.IME = 1
         else:
-            print("> RET")
+            if DEBUG:
+                print("> RET")
+            pass
 
     def _handle_add_SP_int8(self, opcode: int, extra_bytes: List[int]):
         """
@@ -1084,8 +1147,9 @@ class CPU:
         :param opcode:
         :return:
         """
-        print(F"> ADD SP, e")
         immediate = byte_to_int8(extra_bytes[0])
+        if DEBUG:
+            print(F"> ADD SP, e ({immediate:02X})")
 
         value_pre = self.registers.SP
         # 16 bit addition uses the 8 bit ALU, LSB first then MSB, so the resulting flags apply to the high byte
@@ -1113,7 +1177,7 @@ class CPU:
         self.registers.clear_N()
 
     def __str__(self):
-        return f'{self.registers} | IME: {self.IME} | T: {self.clock}'
+        return f'{self.registers} | IME: {self.IME} | T: {self.clock} | LCDC: {self.memory[0xFF40]:02X} | STAT: {self.memory[0xFF41]:02X} | LY: {self.memory[0xFF44]:02X}'
 
     def __repr__(self):
         return self.__str__()

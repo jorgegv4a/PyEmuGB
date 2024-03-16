@@ -107,8 +107,10 @@ class AddressSpace:
             normalized_index = index - 0xFF80
             return self.hram[normalized_index]
 
-        else:
+        elif index == 0xFFFF:
             return self.interrupt_enable[0]
+        else:
+            print(f"Unaccounted for index {index} on read")
 
     def __setitem__(self, index, value):
         if index < 0 or index >= self.size:
@@ -116,10 +118,12 @@ class AddressSpace:
 
         if index < 0x4000:
             # ROM bank 0, not writeable
+            print(f"tried to access {index:02X} which is not writeable")
             return
 
         elif index < 0x8000:
             # ROM bank 1, not writeable
+            print(f"tried to access {index:02X} which is not writeable")
             return
 
         elif index < 0xA000:
@@ -159,9 +163,12 @@ class AddressSpace:
             normalized_index = index - 0xFF80
             self.hram[normalized_index] = value
 
-        else:
+        elif index == 0xFFFF:
             self.interrupt_enable[0] = value
+            print(f"interrupt enable now = {value:08b}")
             # TODO: trigger interrupt enable
+        else:
+            print(f"Unaccounted for index {index:02X} on write")
 
 
 class SingleRegister:
@@ -242,7 +249,8 @@ class DoubleRegister:
             if value < 0:
                 value = (abs(value) ^ 0xFFFF) + 1
             if value > self.max_value:
-                raise ValueError(f'Value must be less than or equal to {self.max_value}')
+                # raise ValueError(f'Value must be less than or equal to {self.max_value}')
+                value = value & 0xFFFF
         super().__setattr__(key, value)
 
 
