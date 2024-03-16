@@ -22,17 +22,21 @@ r16_map = {
     0: 'BC',
     1: 'DE',
     2: 'HL',
-    3: 'AF',
+    3: 'SP',
 }
 
 
 def byte_to_int8(value: int) -> int:
-    return (value & 0x7F) - 128
+    value = value & 0xFF
+    negative = (value >> 7) & 1
+    if negative:
+        value -= 256
+    return value
 
 
 def bytes_to_uint16(value: List[int]) -> int:
     # LSB first
-    return (value[1] << 8) | value[0]
+    return ((value[1] & 0xFF) << 8) | (value[0] & 0xFF)
 
 
 class CPU:
