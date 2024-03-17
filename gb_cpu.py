@@ -91,7 +91,7 @@ class CPU:
         # how many cycles we haven't ticked over yet
         remaining_cycles = opcode_dict["cycles"][0] - (self.clock - start_clock_t)
 
-        if opcode < 0xFF: # unprefixed
+        if opcode <= 0xFF: # unprefixed
             if opcode == 0x00: # NOP
                 if DEBUG:
                     print("> NOP")
