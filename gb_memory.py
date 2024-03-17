@@ -273,7 +273,7 @@ class RegisterBank:
 
     @AF.setter
     def AF(self, value):
-        self._AF.value = value
+        self._AF.value = value & 0xFFF0 # lower nibble of F is always 0
 
     @property
     def BC(self):
