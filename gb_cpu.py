@@ -728,11 +728,11 @@ class CPU:
         value_pre = self.registers.HL
         # 16 bit addition uses the 8 bit ALU, LSB first then MSB, so the resulting flags apply to the high byte
         self.registers.HL += operand_value
-        if (value_pre & 0xF) + (operand_value & 0xF) > 0xF:
+        if ((value_pre >> 8) & 0xF) + ((operand_value >> 8) & 0xF) > 0xF:
             self.registers.set_H()
         else:
             self.registers.clear_H()
-        if value_pre + operand_value > 0xFF:
+        if value_pre + operand_value > 0xFFFF:
             self.registers.set_C()
         else:
             self.registers.clear_C()
