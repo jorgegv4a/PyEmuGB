@@ -103,6 +103,9 @@ class CPU:
                 pass
                 # TODO: stop clock, disable LCD, wait until joypad interrupt
 
+            elif opcode == 0x08:
+                self._handle_load_from_SP_to_indirect_address(opcode, extra_bytes)
+
             # LOADS
             elif (0x40 <= opcode < 0x80) and opcode != 0x76:
                 self._handle_no_param_loads(opcode)
@@ -687,6 +690,13 @@ class CPU:
 
         d16_operand = getattr(self.registers, src_reg)
         self._push_stack(d16_operand)
+
+    def _handle_load_from_SP_to_indirect_address(self, opcode: int, extra_bytes: List[int]):
+        immediate = (extra_bytes[1] << 8) | extra_bytes[0]
+        if DEBUG:
+            print(F"> LD (a16), SP ({immediate:04X})")
+        self.memory[immediate] = self.registers.SP & 0xFF
+        self.memory[immediate + 1] = (self.registers.SP >> 8) & 0xFF
 
     def _handle_inc_dec_r16(self, opcode: int):
         """
