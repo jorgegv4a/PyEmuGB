@@ -26,11 +26,10 @@ r16_map = {
 }
 
 
-def byte_to_int8(value: int) -> int:
-    value = value & 0xFF
-    negative = (value >> 7) & 1
-    if negative:
-        value -= 256
+def byte_to_int16(value: int) -> int:
+    if (value >> 7) & 1 == 1:
+        # negative number, extend sign to 16 bits
+        value = 0xFF00 | value
     return value
 
 
@@ -834,7 +833,7 @@ class CPU:
             condition = self.registers.read_C()
             cond_repr = "C"
 
-        immediate = byte_to_int8(extra_bytes[0])
+        immediate = byte_to_int16(extra_bytes[0])
         if DEBUG:
             print(F"> JR {cond_repr}, e, ({immediate:02X})")
 
@@ -850,7 +849,7 @@ class CPU:
         :param opcode:
         :return: True if condition is met (branch execution), False otherwise
         """
-        immediate = byte_to_int8(extra_bytes[0])
+        immediate = byte_to_int16(extra_bytes[0])
         if DEBUG:
             print(F"> JR e ({immediate:02X})")
         self.registers.write_PC(self.registers.PC + immediate)
@@ -875,7 +874,7 @@ class CPU:
         :return:
         """
         if opcode & 1 == 0: # LD HL, SP+e
-            immediate = byte_to_int8(extra_bytes[0])
+            immediate = byte_to_int16(extra_bytes[0])
             if DEBUG:
                 print(F"> LD HL, SP+e ({immediate:02X})")
 
@@ -885,24 +884,14 @@ class CPU:
             # GB does 8 bit unsigned addition on the lower byte and then inc/dec the the upper one accordingly
             # therefore flags are only affected by the lower byte
             self.registers.HL = result
-            if immediate > 0:
-                if (value_pre & 0xF) + (immediate & 0xF) > 0xF:
-                    self.registers.set_H()
-                else:
-                    self.registers.clear_H()
-                if (value_pre & 0xFF) + (immediate & 0xFF) > 0xFF:
-                    self.registers.set_C()
-                else:
-                    self.registers.clear_C()
+            if (value_pre & 0xF) + (immediate & 0xF) > 0xF:
+                self.registers.set_H()
             else:
-                if (value_pre & 0xF) - (immediate & 0xF) < 0:
-                    self.registers.set_H()
-                else:
-                    self.registers.clear_H()
-                if (value_pre & 0xFF) - (immediate & 0xFF) < 0:
-                    self.registers.set_C()
-                else:
-                    self.registers.clear_C()
+                self.registers.clear_H()
+            if (value_pre & 0xFF) + (immediate & 0xFF) > 0xFF:
+                self.registers.set_C()
+            else:
+                self.registers.clear_C()
 
             self.registers.clear_Z()
             self.registers.clear_N()
@@ -1209,7 +1198,8 @@ class CPU:
         :param opcode:
         :return:
         """
-        immediate = byte_to_int8(extra_bytes[0])
+        immediate = byte_to_int16(extra_bytes[0])
+
         if DEBUG:
             print(F"> ADD SP, e ({immediate:02X})")
 
@@ -1218,26 +1208,15 @@ class CPU:
         result = self.registers.SP + immediate
 
         self.registers.SP = result
-        if immediate > 0:
-            if (value_pre & 0xF) + (immediate & 0xF) > 0xF:
-                self.registers.set_H()
-            else:
-                self.registers.clear_H()
-
-            if (value_pre & 0xFF) + (immediate & 0xFF) > 0xFF:
-                self.registers.set_C()
-            else:
-                self.registers.clear_C()
+        if (value_pre & 0xF) + (immediate & 0xF) > 0xF:
+            self.registers.set_H()
         else:
-            if (value_pre & 0xF) - (immediate & 0xF) < 0:
-                self.registers.set_H()
-            else:
-                self.registers.clear_H()
+            self.registers.clear_H()
 
-            if (value_pre & 0xFF) - (immediate & 0xFF) < 0:
-                self.registers.set_C()
-            else:
-                self.registers.clear_C()
+        if (value_pre & 0xFF) + (immediate & 0xFF) > 0xFF:
+            self.registers.set_C()
+        else:
+            self.registers.clear_C()
 
         self.registers.clear_Z()
         self.registers.clear_N()
