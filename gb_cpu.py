@@ -523,7 +523,7 @@ class CPU:
         if opcode & 1 == 0:
             if DEBUG:
                 print(f"> INC {operand_repr}")
-            new_value = operand_value + 1
+            new_value = (operand_value + 1) & 0xFF
             if dst_reg is None:
                 self.memory[self.registers.HL] = new_value
                 new_value = self.memory[self.registers.HL]  # set again to guarantee overflow works alright
@@ -542,7 +542,7 @@ class CPU:
         elif opcode & 1 == 1:
             if DEBUG:
                 print(f"> DEC {operand_repr}")
-            new_value = operand_value - 1
+            new_value = (operand_value - 1) & 0xFF
             if dst_reg is None:
                 self.memory[self.registers.HL] = new_value
                 new_value = self.memory[self.registers.HL]  # set again to guarantee overflow works alright
@@ -1228,7 +1228,7 @@ class CPU:
         :return:
         """
         src_reg_i = opcode & 0x7
-        src_reg = r8_map.get(src_reg_i, None)
+        src_reg = r8_map.get(src_reg_i, "(HL)")
         if src_reg is None:
             operand_repr = "(HL)"
         else:
@@ -1536,7 +1536,10 @@ class CPU:
         if DEBUG:
             print(f"> RES {bit_n}, {operand_repr}")
         operand_value &= (0xFF ^ (1 << bit_n))
-        setattr(self.registers, src_reg, operand_value)
+        if src_reg is None:
+            self.memory[self.registers.HL] = operand_value
+        else:
+            setattr(self.registers, src_reg, operand_value)
 
     def _handle_bit_set(self, opcode: int):
         """
@@ -1558,7 +1561,10 @@ class CPU:
         if DEBUG:
             print(f"> SET {bit_n}, {operand_repr}")
         operand_value |= 1 << bit_n
-        setattr(self.registers, src_reg, operand_value)
+        if src_reg is None:
+            self.memory[self.registers.HL] = operand_value
+        else:
+            setattr(self.registers, src_reg, operand_value)
 
 
 
