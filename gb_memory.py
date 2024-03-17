@@ -230,7 +230,7 @@ class DoubleRegister:
     def __setitem__(self, key, value):
         if key == 0:
             if value < 0:
-                self.value = ((self.get_high() << 8) - ((-value) & 0xFF)) & 0xFFFF
+                self.value = ((self.get_high() << 8) | (abs(value) ^ 0xFF) + 1) & 0xFFFF
             else:
                 self.value = (self.get_high() << 8) | (value & 0xFF) & 0xFFFF
         elif key == 1:
