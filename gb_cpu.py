@@ -1506,7 +1506,8 @@ class CPU:
 
         bit_n = (opcode >> 3) & 0x7
 
-        print(f"> BIT {bit_n}, {operand_repr}")
+        if DEBUG:
+            print(f"> BIT {bit_n}, {operand_repr}")
 
         if (operand_value >> bit_n) & 1 == 0:
             self.registers.set_Z()
@@ -1532,8 +1533,10 @@ class CPU:
 
         bit_n = (opcode >> 3) & 0x7
 
-        print(f"> RES {bit_n}, {operand_repr}")
+        if DEBUG:
+            print(f"> RES {bit_n}, {operand_repr}")
         operand_value &= (0xFF ^ (1 << bit_n))
+        setattr(self.registers, src_reg, operand_value)
 
     def _handle_bit_set(self, opcode: int):
         """
@@ -1552,8 +1555,10 @@ class CPU:
 
         bit_n = (opcode >> 3) & 0x7
 
-        print(f"> SET {bit_n}, {operand_repr}")
+        if DEBUG:
+            print(f"> SET {bit_n}, {operand_repr}")
         operand_value |= 1 << bit_n
+        setattr(self.registers, src_reg, operand_value)
 
 
 
