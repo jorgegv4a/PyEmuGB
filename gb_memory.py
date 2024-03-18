@@ -63,9 +63,9 @@ class AddressSpace:
     def tick(self):
         if self.dma_start_address is None:
             return
-        self.oam[self.dma_clock_t // 4] = self.rom_bank[self.dma_start_address + self.dma_clock_t // 4]
+        self.oam[self.dma_clock_t // 4] = self[self.dma_start_address + self.dma_clock_t // 4]
         self.dma_clock_t += 1
-        if self.dma_clock_t >= 0x100:
+        if self.dma_clock_t >= 0xa0:
             self.dma_clock_t = 0
             self.dma_start_address = None
 
@@ -169,7 +169,7 @@ class AddressSpace:
 
         elif index < 0xFF4C:
             if index == 0xFF46:
-                self.dma_start_address = value
+                self.dma_start_address = value * 0x100
                 return
             normalized_index = index - 0xFF00
             self.standard_io[normalized_index] = value
