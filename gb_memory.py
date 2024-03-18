@@ -1,4 +1,4 @@
-from gb_constants import GB_ROM_BANK_SIZE, GB_INTERNAL_RAM_SIZE, GB_VRAM_SIZE, OAM_SIZE, CARTRIDGE_ROM_ONLY
+from gb_constants import GB_ROM_BANK_SIZE, GB_INTERNAL_RAM_SIZE, GB_VRAM_SIZE, OAM_SIZE, CARTRIDGE_ROM_ONLY, Interrupt
 
 FLAG_Z_MASK = 0x80
 FLAG_N_MASK = 0x40
@@ -36,6 +36,8 @@ class AddressSpace:
             0xFF80,
             0xFFFF,
         ]
+        self.dma_start_address = None
+        self.dma_clock_t = 0
 
     def load_rom(self, rom: bytes, cartridge_type: int):
         rom_size = len(rom)
@@ -53,6 +55,20 @@ class AddressSpace:
                 self.rom_bank[i] = rom[i]
             for i in range(len(self.active_rom_bank)):
                 self.active_rom_bank[i] = rom[len(self.rom_bank) + i]
+
+    def request_interrupt(self, interrupt: Interrupt):
+        interrupt_bit_mask = (1 << interrupt.value)
+        self.standard_io[0xFF0F - 0xFF00] = self.standard_io[0xFF0F - 0xFF00] | interrupt_bit_mask
+
+    def tick(self):
+        if self.dma_start_address is None:
+            return
+        self.oam[self.dma_clock_t // 4] = self.rom_bank[self.dma_start_address + self.dma_clock_t // 4]
+        self.dma_clock_t += 1
+        if self.dma_clock_t >= 0x100:
+            self.dma_clock_t = 0
+            self.dma_start_address = None
+
 
     def __getitem__(self, index):
         if isinstance(index, slice):
@@ -152,6 +168,9 @@ class AddressSpace:
             self.empty_io[normalized_index] = value
 
         elif index < 0xFF4C:
+            if index == 0xFF46:
+                self.dma_start_address = value
+                return
             normalized_index = index - 0xFF00
             self.standard_io[normalized_index] = value
 

@@ -62,6 +62,7 @@ class CPU:
         self.clock += n
         for i in range(n):
             self.ppu.tick()
+            self.memory.tick()
 
     def fetch(self):
         opcode = self.memory[self.registers.PC]
