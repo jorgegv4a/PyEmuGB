@@ -956,19 +956,20 @@ class CPU:
             self.registers.clear_H()
 
     def _decimal_adjust_acc(self):
+        output_value = self.registers.A
         if self.registers.read_N():
             if self.registers.read_C():
-                self.registers.A -= 0x60
+                output_value -= 0x60
             if self.registers.read_H():
-                self.registers.A -= 0x06
+                output_value -= 0x06
         else:
             if self.registers.read_C() or self.registers.A > 0x99:
-                self.registers.A += 0x60
+                output_value += 0x60
                 self.registers.set_C()
-            if self.registers.read_H() or (self.registers.A & 0x0F) > 0x99:
-                self.registers.A += 0x06
-            if self.registers.read_H():
-                self.registers.A -= 0x06
+            if self.registers.read_H() or ((self.registers.A & 0x0F) > 0x09):
+                output_value += 0x06
+        output_value = output_value & 0xFFFF
+        self.registers.A = output_value & 0xFF
         if self.registers.A == 0:
             self.registers.set_Z()
         else:
