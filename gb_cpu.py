@@ -1,8 +1,8 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from gb_memory import AddressSpace, RegisterBank
 from gb_ops import opcodes
-from gb_constants import CARTRIDGE_ROM_ONLY
+from gb_constants import CARTRIDGE_ROM_ONLY, Interrupt
 from gb_graphics import LCDController, get_tiles
 
 # DEBUG = True
@@ -68,6 +68,25 @@ class CPU:
         self.registers.increment_pc()
         self.tick(4)
         return opcode
+
+    def check_interrupts(self) -> Optional[Interrupt]:
+        interrupt_flags = self.memory[0xFF0F]
+        interrupt_enables = self.memory[0xFFFF]
+        if not self.IME:
+            return None
+
+        for interrupt_i in range(5):
+            if (interrupt_flags << interrupt_i) & 1 == 1 and (interrupt_enables << interrupt_i) & 1 == 1:
+                return Interrupt(interrupt_i)
+
+    def serve_interrupt(self, interrupt: Interrupt):
+        self.IME = 0
+        self.memory[0xFF0F] = (self.memory[0xFF0F] << interrupt.value) & (0xFF ^ (1 << interrupt.value))
+
+        address = 0x40 + 8 * interrupt.value
+
+        self._push_stack(self.registers.PC)
+        self.registers.write_PC(address)
 
     def decode(self, opcode: int):
         if opcode != 0xCB:

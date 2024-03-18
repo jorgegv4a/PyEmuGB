@@ -2,7 +2,7 @@ from typing import List
 from queue import Queue
 
 from gb_memory import AddressSpace
-from gb_constants import NUM_SCAN_LINES, NUM_DOTS_PER_LINE
+from gb_constants import Interrupt
 
 
 LCD_MODE_0 = 0 # H-Blank
@@ -15,6 +15,34 @@ class MaskedMemoryAccess:
     # Prevents PPU from accessing memory it's not supposed to know about
     def __init__(self, cpu_memory: AddressSpace):
         self.memory = cpu_memory
+
+    def request_interrupt(self, interrupt: Interrupt):
+        if interrupt == Interrupt.VBlank:
+            self.memory.request_interrupt(interrupt)
+        elif interrupt == Interrupt.LCD:
+            pass
+        else:
+            print(f"PPU requested unexpected interrupt: {interrupt}")
+            return
+
+    def get_stat_mode(self) -> int:
+        status = self.memory[0xFF41]
+        mode_bitmap = (status >> 3) & 7
+        return mode_bitmap
+
+    def set_ly(self, ly: int, prev_ly: int):
+        self.memory[0xFF44] = ly
+        lyc = self.memory[0xFF45]
+        lyc_compare_mode = self.memory[0xFF41]
+        interrupt_on_equal_lyc = ((lyc_compare_mode >> 6) & 1) == 1
+
+        ly_equals_lyc = ly == lyc
+        if ly_equals_lyc:
+            self.memory[0xFF41] = self.memory[0xFF41] | (1 << 2)
+            if interrupt_on_equal_lyc and prev_ly != ly:
+                self.request_interrupt(Interrupt.LCD)
+        else:
+            self.memory[0xFF41] = self.memory[0xFF41] & (0xFF ^ (1 << 2))
 
     def __getitem__(self, index):
         if isinstance(index, slice):
@@ -29,7 +57,9 @@ class MaskedMemoryAccess:
             return self.memory[index]
         elif index == 0xFF40: # LCD control
             return self.memory[index]
-        elif index == 0xFF44: # LCD LY
+        elif index == 0xFF41: # LCD STATUS
+            return self.memory[index]
+        elif index == 0xFF45: # LCD LY COMPARE VALUE
             return self.memory[index]
         else:
             raise ValueError(f'PPU cannot access  #{index:04X}')
@@ -39,7 +69,7 @@ class MaskedMemoryAccess:
             self.memory[index] = value
         elif 0xFE00 <= index < 0xFEA0:  # OAM
             self.memory[index] = value
-        elif index in (0xFF44, 0xFF41):  # LCD status
+        elif index == 0xFF41:  # LCD status
             self.memory[index] = value
         else:
             raise ValueError(f'PPU cannot access  #{index:04X}')
@@ -63,6 +93,8 @@ class LCDController:
         self.bg_pixel_fifo: Queue = Queue(16)
         self.obj_pixel_fifo: Queue = Queue(16)
         self.line_objs: List[SpriteData] = []
+        self.past_mode = None
+        self.past_ly: int = 0
 
     @property
     def mode(self) -> int:
@@ -148,7 +180,21 @@ class LCDController:
             if self.ly == 154:
                 self.ly = 0
 
-        self.memory[0xFF44] = self.ly
+        self.memory.set_ly(self.ly, self.past_ly)
+
+        if self.past_mode is not None:
+            if self.mode == LCD_MODE_1:
+                self.memory.request_interrupt(Interrupt.VBlank)
+            if self.mode != self.past_mode:
+                modes = self.memory.get_stat_mode()
+                if (modes & 1 == 1) and self.mode == LCD_MODE_0:
+                    self.memory.request_interrupt(Interrupt.LCD)
+                elif ((modes >> 1) & 1 == 1) and self.mode == LCD_MODE_1:
+                    self.memory.request_interrupt(Interrupt.LCD)
+                elif ((modes >> 2) & 1 == 1) and self.mode == LCD_MODE_2:
+                    self.memory.request_interrupt(Interrupt.LCD)
+        self.past_mode = self.mode
+        self.past_ly = self.ly
         return
 
 

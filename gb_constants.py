@@ -1,3 +1,14 @@
+from enum import Enum
+
+
+class Interrupt(Enum):
+    VBlank = 0
+    LCD = 1
+    Timer = 2
+    Serial = 3
+    Joypad = 4
+
+
 GB_ROM_BANK_SIZE = 16 * 1024
 GB_INTERNAL_RAM_SIZE = 8 * 1024
 GB_VRAM_SIZE = 8 * 1024
