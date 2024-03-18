@@ -1,8 +1,12 @@
+import numpy as np
+import cv2
+
+
 from typing import List
 from queue import Queue
 
 from gb_memory import AddressSpace
-from gb_constants import Interrupt
+from gb_constants import Interrupt, SCREEN_HEIGHT, SCREEN_WIDTH
 
 
 LCD_MODE_0 = 0 # H-Blank
@@ -96,6 +100,31 @@ class LCDController:
         self.past_mode = None
         self.past_ly: int = 0
 
+        self.window_name = "Game"
+        self.image = np.zeros((SCREEN_HEIGHT, SCREEN_WIDTH), dtype=np.uint8)
+        self.tick_i = 0
+        self.show()
+
+    def show(self):
+        if self.tick_i % 10000 == 0:
+            tiles_per_row = SCREEN_WIDTH // 8
+            max_tiles_per_screen = (SCREEN_WIDTH // 8) * (SCREEN_HEIGHT // 8)
+            for tile_start_i in np.arange(0x8000, 0x8000 + max_tiles_per_screen * 16, 16):
+                tile_i = (tile_start_i - 0x8000) // 16
+                tile_x0 = ((tile_i * 8) % SCREEN_WIDTH)
+                tile_y0 = (tile_i // tiles_per_row) * 8
+                for j in range(8):
+                    tile_low_byte = self.memory[tile_start_i + 2 * j]
+                    tile_high_byte = self.memory[(tile_start_i + 2 * j) + 1]
+                    for i in range(8):
+                        low_byte = ((tile_low_byte >> i) & 1)
+                        high_byte = (((tile_high_byte >> i) & 1) << 1)
+                        color_id = high_byte | low_byte
+                        self.image[tile_y0 + j, tile_x0 + 7 - i] = 255 - int(255 / 3 * color_id)
+
+            cv2.imshow(self.window_name, cv2.resize(self.image, None, fx=4, fy=4))
+            cv2.waitKey(1)
+
     @property
     def mode(self) -> int:
         if self.ly >= 144:
@@ -141,25 +170,27 @@ class LCDController:
         if not self.__get_ppu_enabled():
             return
         if self.mode == LCD_MODE_2:
+            continue_scan = True
             if len(self.line_objs) == 10:
                 # can only draw up to 10 sprites per line
                 self.dot += 1
-                return
+                continue_scan = False
             obj_i = self.dot
             object_data = SpriteData(self.memory[0xFE00 + obj_i: 0xFE00 + obj_i + 4])
             if object_data.y < 8 and not self.__get_obj_size():
                 # 8x8 sprite outside screen
                 self.dot += 1
-                return
+                continue_scan = False
             elif object_data.y >= 160:
                 # 8x8/8x16 sprite outside screen
                 self.dot += 1
-                return
+                continue_scan = False
 
-            self.line_objs.append(object_data)
-            self.dot += 1
-            if self.dot == 80:
-                self.drawing_current_line = True
+            if continue_scan:
+                self.line_objs.append(object_data)
+                self.dot += 1
+                if self.dot == 80:
+                    self.drawing_current_line = True
 
         elif self.mode == LCD_MODE_3:
             self.dot += 1
@@ -195,6 +226,8 @@ class LCDController:
                     self.memory.request_interrupt(Interrupt.LCD)
         self.past_mode = self.mode
         self.past_ly = self.ly
+        self.show()
+        self.tick_i += 1
         return
 
 
