@@ -54,7 +54,7 @@ class JoypadController:
         except AttributeError:
             key = key.name
         if key in ("right", "d"):
-            self.state &= 0
+            self.state &= (1 ^ 0xFF)
 
         if key in ("left", "a"):
             self.state &= ((1 << 1) ^ 0xFF)
@@ -77,9 +77,13 @@ class JoypadController:
         if key == "space": # Start
             self.state &= ((1 << 7) ^ 0xFF)
 
-    def _on_release(self, key):
+    def _on_release(self, key: Optional[Union[keyboard.Key, keyboard.KeyCode]]):
         if key is None:
             return
+        try:
+            key = key.char
+        except AttributeError:
+            key = key.name
         if key in ("right", "d"):
             self.state |= 1
 

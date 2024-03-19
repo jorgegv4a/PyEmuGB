@@ -114,9 +114,9 @@ class AddressSpace:
             return self.empty_io[normalized_index]
 
         elif index < 0xFF4C:
-            if index == 0xFF00:
-                return 0xFF
             normalized_index = index - 0xFF00
+            # if index == 0xFF00:
+            #     print(f"keys: {self.standard_io[normalized_index]:08b}")
             return self.standard_io[normalized_index]
 
         elif index < 0xFF80:
