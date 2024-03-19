@@ -189,8 +189,7 @@ class AddressSpace:
 
         elif index == 0xFFFF:
             self.interrupt_enable[0] = value
-            print(f"interrupt enable now = {value:08b}")
-            # TODO: trigger interrupt enable
+            # print(f"interrupt enable now = {value:08b}")
         else:
             print(f"Unaccounted for index {index:02X} on write")
 

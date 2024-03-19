@@ -17,7 +17,7 @@ LCD_MODE_2 = 2 # OAM Scan
 LCD_MODE_3 = 3 # Drawing
 
 
-class MaskedMemoryAccess:
+class PPUMaskedMemoryAccess:
     # Prevents PPU from accessing memory it's not supposed to know about
     def __init__(self, cpu_memory: AddressSpace):
         self.memory = cpu_memory
@@ -26,7 +26,7 @@ class MaskedMemoryAccess:
         if interrupt == Interrupt.VBlank:
             self.memory.request_interrupt(interrupt)
         elif interrupt == Interrupt.LCD:
-            pass
+            self.memory.request_interrupt(interrupt)
         else:
             print(f"PPU requested unexpected interrupt: {interrupt}")
             return
@@ -139,7 +139,7 @@ class LCDController:
         self.dot: int = 0
         self.ly: int = 0
         self.drawing_current_line: bool = False
-        self.memory = MaskedMemoryAccess(memory)
+        self.memory = PPUMaskedMemoryAccess(memory)
         self.bg_pixel_fifo: Queue = Queue(16)
         self.obj_pixel_fifo: Queue = Queue(16)
         self.line_objs: List[SpriteData] = []
@@ -163,7 +163,7 @@ class LCDController:
         return tile
 
     def show(self):
-        if self.tick_i % 10000 == 0:
+        if self.tick_i % 8000 == 0:
             full_image = np.zeros((256, 256), dtype=np.uint8)
             bg_map = self.memory.get_background_tile_map()
             tiles = {i: self.get_tile(i) for i in np.unique(bg_map)}

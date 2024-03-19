@@ -4,6 +4,7 @@ from gb_memory import AddressSpace, RegisterBank
 from gb_ops import opcodes
 from gb_constants import CARTRIDGE_ROM_ONLY, Interrupt
 from gb_graphics import LCDController
+from gb_joypad import JoypadController
 
 # DEBUG = True
 DEBUG = False
@@ -44,6 +45,7 @@ class CPU:
         self.memory = AddressSpace()
         self.memory.load_rom(game_rom, CARTRIDGE_ROM_ONLY)
         self.ppu = LCDController(self.memory)
+        self.joypad = JoypadController(self.memory)
         self.IME = 0 # Interrupt Master Enable
         self.clock = 0 # real clock, Machine cycles take 4 cycles, PPU dots take 1 cycle
 
@@ -60,6 +62,7 @@ class CPU:
         self.clock += n
         for i in range(n):
             self.ppu.tick()
+            self.joypad.tick()
             self.memory.tick()
 
     def fetch(self):
@@ -298,9 +301,12 @@ class CPU:
     def run(self):
         self.boot()
         while True:
-            # print(F"PC: 0x{self.registers.PC:04X}")
             if DEBUG:
                 print(F"{self}")
+
+            interrupt = self.check_interrupts()
+            if interrupt:
+                self.serve_interrupt(interrupt)
             opcode = self.fetch()
             opcode_dict, opcode = self.decode(opcode)
             instr_str = f"{opcode:02X} ({opcode_dict['cycles']}) {opcode_dict['mnemonic']}"
@@ -308,8 +314,8 @@ class CPU:
                 instr_str += f" {opcode_dict['operand1']}"
             if "operand2" in opcode_dict:
                 instr_str += f", {opcode_dict['operand2']}"
-            if DEBUG:
-                print(f"\t{instr_str}")
+            # if DEBUG:
+            #     print(f"\t{instr_str}")
             self.execute(opcode, opcode_dict)
 
     def _load_to_r8(self, dst_reg: str, value: int):
