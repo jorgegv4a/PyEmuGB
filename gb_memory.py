@@ -104,14 +104,18 @@ class AddressSpace:
             return self.internal_ram[normalized_index]
 
         elif index < 0xFEA0:
+            # TODO: disable access except during H/V Blank
             normalized_index = index - 0xFE00
             return self.oam[normalized_index]
+
 
         elif index < 0xFF00:
             normalized_index = index - 0xFEA0
             return self.empty_io[normalized_index]
 
         elif index < 0xFF4C:
+            if index == 0xFF00:
+                return 0xFF
             normalized_index = index - 0xFF00
             return self.standard_io[normalized_index]
 
@@ -160,6 +164,7 @@ class AddressSpace:
             self.internal_ram[normalized_index] = value
 
         elif index < 0xFEA0:
+            # TODO: disable access except during H/V Blank
             normalized_index = index - 0xFE00
             self.oam[normalized_index] = value
 

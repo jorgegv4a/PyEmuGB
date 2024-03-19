@@ -3,7 +3,7 @@ from typing import Dict, List, Optional
 from gb_memory import AddressSpace, RegisterBank
 from gb_ops import opcodes
 from gb_constants import CARTRIDGE_ROM_ONLY, Interrupt
-from gb_graphics import LCDController, get_tiles
+from gb_graphics import LCDController
 
 # DEBUG = True
 DEBUG = False
@@ -46,8 +46,6 @@ class CPU:
         self.ppu = LCDController(self.memory)
         self.IME = 0 # Interrupt Master Enable
         self.clock = 0 # real clock, Machine cycles take 4 cycles, PPU dots take 1 cycle
-
-        get_tiles(self.memory)
 
     def tick(self, n):
         """

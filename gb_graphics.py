@@ -6,7 +6,9 @@ from typing import List
 from queue import Queue
 
 from gb_memory import AddressSpace
-from gb_constants import Interrupt, SCREEN_HEIGHT, SCREEN_WIDTH
+from gb_constants import Interrupt, SCREEN_HEIGHT, SCREEN_WIDTH, LCDC_OBJ_ENABLE_BIT, LCDC_OBJ_SIZE_BIT, \
+    LCDC_BG_TILE_MAP_BIT, LCDC_BG_WINDOW_TILE_DATA_AREA_BIT, LCDC_WINDOW_ENABLE_BIT, LCDC_WINDOW_TILE_MAP_BIT, \
+    LCDC_PPU_ENABLE_BIT
 
 
 LCD_MODE_0 = 0 # H-Blank
@@ -48,6 +50,59 @@ class MaskedMemoryAccess:
         else:
             self.memory[0xFF41] = self.memory[0xFF41] & (0xFF ^ (1 << 2))
 
+    def _get_win_tile_map(self) -> int:
+        return (self.memory[0xFF40] >> LCDC_WINDOW_TILE_MAP_BIT) & 1
+
+    def _get_bg_win_tile_data_zone(self) -> int:
+        return (self.memory[0xFF40] >> LCDC_BG_WINDOW_TILE_DATA_AREA_BIT) & 1
+
+    def _get_bg_tile_map(self) -> int:
+        return (self.memory[0xFF40] >> LCDC_BG_TILE_MAP_BIT) & 1
+
+    def get_obj_size(self) -> int:
+        return (self.memory[0xFF40] >> LCDC_OBJ_SIZE_BIT) & 1
+
+    def get_ppu_enabled(self) -> int:
+        return (self.memory[0xFF40] >> LCDC_PPU_ENABLE_BIT) & 1
+
+    def get_obj_enabled(self) -> int:
+        return (self.memory[0xFF40] >> LCDC_OBJ_ENABLE_BIT) & 1
+
+    @property
+    def scx(self):
+        return self.memory[0xFF43]
+
+    @property
+    def scy(self):
+        return self.memory[0xFF42]
+
+    @property
+    def wx(self):
+        return self.memory[0xFF4A]
+
+    @property
+    def wy(self):
+        return self.memory[0xFF4B]
+
+    def get_background_tile_map(self) -> np.ndarray:
+        tile_map = np.zeros((32, 32), dtype=np.uint16)
+        if self._get_bg_tile_map():
+            tile_map_base_address = 0x9C00
+        else:
+            tile_map_base_address = 0x9800
+
+        for tile_map_idx in range(1024):
+            tile_x = tile_map_idx % 32
+            tile_y = tile_map_idx // 32
+            tile_offset = self.memory[tile_map_base_address + tile_map_idx]
+            if self._get_bg_win_tile_data_zone():
+                tile_address = 0x8000 + tile_offset * 16
+            else:
+                tile_address = 0x9000 + (tile_offset - 128) * 16
+            # tile_idx = self.memory[tile_address]
+            tile_map[tile_y, tile_x] = tile_address
+        return tile_map
+
     def __getitem__(self, index):
         if isinstance(index, slice):
             start = index.start if index.start is not None else 0
@@ -79,15 +134,6 @@ class MaskedMemoryAccess:
             raise ValueError(f'PPU cannot access  #{index:04X}')
 
 
-LCDC_OBJ_ENABLE_BIT = 1
-LCDC_OBJ_SIZE_BIT = 2
-LCDC_BG_TILE_MAP_BIT = 3
-LCDC_BG_WINDOW_MAP_BIT = 4
-LCDC_WINDOW_ENABLE_BIT = 5
-LCDC_WINDOW_TILE_MAP_BIT = 6
-LCDC_PPU_ENABLE_BIT = 7
-
-
 class LCDController:
     def __init__(self, memory: AddressSpace):
         self.dot: int = 0
@@ -103,26 +149,53 @@ class LCDController:
         self.window_name = "Game"
         self.image = np.zeros((SCREEN_HEIGHT, SCREEN_WIDTH), dtype=np.uint8)
         self.tick_i = 0
-        self.show()
+
+    def get_tile(self, tile_start_i: int):
+        tile = np.zeros((8, 8), np.uint8)
+        for j in range(8):
+            tile_low_byte = self.memory[tile_start_i + 2 * j]
+            tile_high_byte = self.memory[(tile_start_i + 2 * j) + 1]
+            for i in range(8):
+                low_byte = ((tile_low_byte >> i) & 1)
+                high_byte = (((tile_high_byte >> i) & 1) << 1)
+                color_id = high_byte | low_byte
+                tile[j, 7 - i] = 255 - int(255 / 3 * color_id)
+        return tile
 
     def show(self):
         if self.tick_i % 10000 == 0:
-            tiles_per_row = SCREEN_WIDTH // 8
-            max_tiles_per_screen = (SCREEN_WIDTH // 8) * (SCREEN_HEIGHT // 8)
-            for tile_start_i in np.arange(0x8000, 0x8000 + max_tiles_per_screen * 16, 16):
-                tile_i = (tile_start_i - 0x8000) // 16
-                tile_x0 = ((tile_i * 8) % SCREEN_WIDTH)
-                tile_y0 = (tile_i // tiles_per_row) * 8
-                for j in range(8):
-                    tile_low_byte = self.memory[tile_start_i + 2 * j]
-                    tile_high_byte = self.memory[(tile_start_i + 2 * j) + 1]
-                    for i in range(8):
-                        low_byte = ((tile_low_byte >> i) & 1)
-                        high_byte = (((tile_high_byte >> i) & 1) << 1)
-                        color_id = high_byte | low_byte
-                        self.image[tile_y0 + j, tile_x0 + 7 - i] = 255 - int(255 / 3 * color_id)
+            full_image = np.zeros((256, 256), dtype=np.uint8)
+            bg_map = self.memory.get_background_tile_map()
+            tiles = {i: self.get_tile(i) for i in np.unique(bg_map)}
+            for j in range(32):
+                tile_y0 = j * 8
+                for i in range(32):
+                    tile_x0 = i * 8
+                    tile_idx = bg_map[j, i]
+                    full_image[tile_y0: tile_y0 + 8, tile_x0: tile_x0 + 8] = tiles[tile_idx]
+            view_x0 = self.memory.scx
+            view_y0 = self.memory.scy
 
-            cv2.imshow(self.window_name, cv2.resize(self.image, None, fx=4, fy=4))
+            # rect from viewport x0y0 to tilemap x1y1
+            margin_x = 255 - view_x0
+            margin_y = 255 - view_y0
+            # how many pixels fit from view_x0 to the edge of the tile map
+            fit_x = min(SCREEN_WIDTH, margin_x)
+            fit_y = min(SCREEN_HEIGHT, margin_y)
+            self.image[:fit_y, :fit_x] = full_image[view_y0: view_y0 + fit_y, view_x0: view_x0 + fit_x]
+
+            # rect from tilemap x0y0 to viewport x1y1
+            # how many more pixels we need to fit the edge of the screen
+            leftover_x = SCREEN_WIDTH - fit_x
+            leftover_y = SCREEN_HEIGHT - fit_y
+            self.image[fit_y:, fit_x:] = full_image[margin_y: margin_y + leftover_y, margin_x: margin_x + leftover_x]
+
+            # edge, corner @ viewport x0, tilemap y0 to tilemap x1, viewport y1
+            self.image[fit_y:, :fit_x] = full_image[margin_y :margin_y + leftover_y, view_x0: view_x0 + fit_x]
+
+            # edge, corner @ tilemap x0, viewport y0 to viewport x1, tilemap y1
+            self.image[:fit_y, fit_x:] = full_image[view_y0: view_y0 + fit_y, margin_x: margin_x + leftover_x]
+            cv2.imshow(self.window_name, cv2.resize(self.image, None, fx=2, fy=2))
             cv2.waitKey(1)
 
     @property
@@ -135,15 +208,6 @@ class LCDController:
             return LCD_MODE_3
         elif self.ly < 144:
             return LCD_MODE_0
-
-    def __get_obj_size(self) -> int:
-        return (self.memory[0xFF40] >> LCDC_OBJ_SIZE_BIT) & 1
-
-    def __get_ppu_enabled(self) -> int:
-        return (self.memory[0xFF40] >> LCDC_PPU_ENABLE_BIT) & 1
-
-    def __get_obj_enabled(self) -> int:
-        return (self.memory[0xFF40] >> LCDC_OBJ_ENABLE_BIT) & 1
 
     def tick(self):
         """
@@ -167,7 +231,7 @@ class LCDController:
         Each object is defined by 4 bytes
         All sprites are either 8x8 or 8x16 pixels
         """
-        if not self.__get_ppu_enabled():
+        if not self.memory.get_ppu_enabled():
             return
         if self.mode == LCD_MODE_2:
             continue_scan = True
@@ -177,7 +241,7 @@ class LCDController:
                 continue_scan = False
             obj_i = self.dot
             object_data = SpriteData(self.memory[0xFE00 + obj_i: 0xFE00 + obj_i + 4])
-            if object_data.y < 8 and not self.__get_obj_size():
+            if object_data.y < 8 and not self.memory.get_obj_size():
                 # 8x8 sprite outside screen
                 self.dot += 1
                 continue_scan = False
@@ -266,7 +330,3 @@ class SpriteData:
 
     def __repr__(self):
         return self.__str__()
-
-
-def get_tiles(memory):
-    print()
