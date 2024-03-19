@@ -69,13 +69,7 @@ class AddressSpace:
             self.dma_clock_t = 0
             self.dma_start_address = None
 
-
-    def __getitem__(self, index):
-        if isinstance(index, slice):
-            start = index.start if index.start is not None else 0
-            stop = index.stop if index.stop is not None else self.size
-            step = index.step if index.step is not None else 1
-            return [self[i] for i in range(start, stop, step)]
+    def get_individual(self, index: int):
         if index < 0 or index >= self.size:
             raise ValueError(f'Address {index:04X} out of range')
 
@@ -108,7 +102,6 @@ class AddressSpace:
             normalized_index = index - 0xFE00
             return self.oam[normalized_index]
 
-
         elif index < 0xFF00:
             normalized_index = index - 0xFEA0
             return self.empty_io[normalized_index]
@@ -131,6 +124,14 @@ class AddressSpace:
             return self.interrupt_enable[0]
         else:
             print(f"Unaccounted for index {index} on read")
+
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            start = index.start if index.start is not None else 0
+            stop = index.stop if index.stop is not None else self.size
+            step = index.step if index.step is not None else 1
+            return [self.get_individual(i) for i in range(start, stop, step)]
+        return self.get_individual(index)
 
     def __setitem__(self, index, value):
         if index < 0 or index >= self.size:

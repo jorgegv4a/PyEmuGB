@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import cv2
 
@@ -103,13 +104,7 @@ class PPUMaskedMemoryAccess:
             tile_map[tile_y, tile_x] = tile_address
         return tile_map
 
-    def __getitem__(self, index):
-        if isinstance(index, slice):
-            start = index.start if index.start is not None else 0
-            stop = index.stop if index.stop is not None else self.memory.size
-            step = index.step if index.step is not None else 1
-            return [self[i] for i in range(start, stop, step)]
-
+    def get_individual(self, index: int) -> int:
         if 0x8000 <= index < 0xA000: # VRAM
             return self.memory[index]
         elif 0xFE00 <= index < 0xFEA0: # OAM
@@ -122,6 +117,14 @@ class PPUMaskedMemoryAccess:
             return self.memory[index]
         else:
             raise ValueError(f'PPU cannot access  #{index:04X}')
+
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            start = index.start if index.start is not None else 0
+            stop = index.stop if index.stop is not None else self.memory.size
+            step = index.step if index.step is not None else 1
+            return [self.get_individual(i) for i in range(start, stop, step)]
+        return self.get_individual(index)
 
     def __setitem__(self, index, value):
         if 0x8000 <= index < 0xA000: # VRAM
@@ -149,6 +152,7 @@ class LCDController:
         self.window_name = "Game"
         self.image = np.zeros((SCREEN_HEIGHT, SCREEN_WIDTH), dtype=np.uint8)
         self.tick_i = 0
+        self.last_frame_time = time.time()
 
     def get_tile(self, tile_start_i: int):
         tile = np.zeros((8, 8), np.uint8)
@@ -163,7 +167,9 @@ class LCDController:
         return tile
 
     def show(self):
-        if self.tick_i % 8000 == 0:
+        if self.tick_i % 70224 == 0:
+            elapsed = time.time() - self.last_frame_time
+            print(f"Frame Time: {elapsed:.2f}s ({1/elapsed:.2f} FPS)")
             full_image = np.zeros((256, 256), dtype=np.uint8)
             bg_map = self.memory.get_background_tile_map()
             tiles = {i: self.get_tile(i) for i in np.unique(bg_map)}
@@ -195,6 +201,9 @@ class LCDController:
 
             # edge, corner @ tilemap x0, viewport y0 to viewport x1, tilemap y1
             self.image[:fit_y, fit_x:] = full_image[view_y0: view_y0 + fit_y, margin_x: margin_x + leftover_x]
+
+            self.last_frame_time = time.time()
+
             cv2.imshow(self.window_name, cv2.resize(self.image, None, fx=2, fy=2))
             cv2.waitKey(1)
 
